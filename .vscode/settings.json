@@ -1,0 +1,5 @@
+{
+  "python.defaultInterpreterPath": "python",
+  "python.terminal.activateEnvironment": true,
+  "debug.serverReadyAction.externalBrowser": "C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe"
+}

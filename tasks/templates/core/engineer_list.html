@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <h1 class="text-2xl font-bold mb-6 text-blue-800">Engineers</h1>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {% for engineer in engineers %}
+        <div class="bg-white p-4 shadow rounded-lg flex items-center justify-between">
+            <div>
+                <div class="font-bold text-blue-700">{{ engineer.username }}</div>
+                <div class="text-sm text-gray-600">{{ engineer.email|default:"No email" }}</div>
+                <div class="text-xs text-gray-500 mt-1">{{ engineer.tasks.count }} task{{ engineer.tasks.count|pluralize }} assigned</div>
+            </div>
+            <a href="{% url 'engineer_detail' engineer.pk %}" class="bg-blue-800 text-white px-4 py-2 rounded hover:bg-blue-900 transition text-sm">View Tasks</a>
+        </div>
+        {% empty %}
+        <div class="text-gray-500">No engineers added yet.</div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

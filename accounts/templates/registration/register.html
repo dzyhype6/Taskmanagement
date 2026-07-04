@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="min-h-screen flex items-center justify-center bg-gray-100">
+    <div class="w-full max-w-md bg-white rounded-lg shadow-lg p-8">
+        <h2 class="text-2xl font-bold text-blue-800 mb-6 text-center">Register New Account</h2>
+        <form method="post">
+            {% csrf_token %}
+            {% if form.errors %}
+                <div class="mb-4 text-red-600">
+                    {% for field in form %}
+                        {% for error in field.errors %}
+                            <p>{{ error }}</p>
+                        {% endfor %}
+                    {% endfor %}
+                    {% for error in form.non_field_errors %}
+                        <p>{{ error }}</p>
+                    {% endfor %}
+                </div>
+            {% endif %}
+            <div class="mb-4">
+                <label for="id_username" class="block mb-2 text-sm font-medium text-gray-700">Username</label>
+                {{ form.username }}
+            </div>
+            <div class="mb-4">
+                <label for="id_email" class="block mb-2 text-sm font-medium text-gray-700">Email</label>
+                {{ form.email }}
+            </div>
+            <div class="mb-4">
+                <label for="id_role" class="block mb-2 text-sm font-medium text-gray-700">Role</label>
+                {{ form.role }}
+            </div>
+            <div class="mb-4">
+                <label for="id_password1" class="block mb-2 text-sm font-medium text-gray-700">Password</label>
+                {{ form.password1 }}
+            </div>
+            <div class="mb-6">
+                <label for="id_password2" class="block mb-2 text-sm font-medium text-gray-700">Confirm Password</label>
+                {{ form.password2 }}
+            </div>
+            <button type="submit" class="w-full bg-blue-800 text-white font-semibold py-2 px-4 rounded hover:bg-blue-900 transition">Register</button>
+        </form>
+        
+    </div>
+</div>
+{% endblock %}

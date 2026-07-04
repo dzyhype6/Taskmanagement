@@ -31,6 +31,8 @@ ALLOWED_HOSTS = []
 # Application definition
 
 INSTALLED_APPS = [
+    'tasks',
+    'accounts',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -62,6 +64,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'tasks.context_processors.notifications',
             ],
         },
     },
@@ -116,8 +119,46 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.1/howto/static-files/
 
 STATIC_URL = 'static/'
+STATICFILES_DIRS = [BASE_DIR / 'static']
+
+# Uploaded files (task attachments)
+MEDIA_URL = 'media/'
+MEDIA_ROOT = BASE_DIR / 'media'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+
+AUTH_USER_MODEL = 'tasks.User'
+
+# Allow case-insensitive username login (e.g. 'collins' works as well as 'Collins')
+AUTHENTICATION_BACKENDS = [
+    'accounts.backends.CaseInsensitiveModelBackend',
+    'django.contrib.auth.backends.ModelBackend',
+]
+
+LOGIN_REDIRECT_URL = 'role_redirect'
+LOGOUT_REDIRECT_URL = 'login'
+
+# --- Email (Gmail SMTP) ---
+# To send REAL emails: create email_config.py next to this file (see email_config.example.py)
+# and put your Gmail address + 16-char App Password there. Until then, emails are skipped
+# gracefully and only the in-app notification is created.
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_TIMEOUT = 10
+EMAIL_HOST_USER = ''
+EMAIL_HOST_PASSWORD = ''
+DEFAULT_FROM_EMAIL = 'CodeForge Engineering <noreply@codeforge.local>'
+
+# Load real credentials from email_config.py if present (kept out of the main settings).
+try:
+    from .email_config import EMAIL_HOST_USER, EMAIL_HOST_PASSWORD  # noqa: F811
+    if EMAIL_HOST_USER:
+        DEFAULT_FROM_EMAIL = f'CodeForge Engineering <{EMAIL_HOST_USER}>'
+except Exception:
+    pass

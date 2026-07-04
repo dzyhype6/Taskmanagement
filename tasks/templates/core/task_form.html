@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="max-w-lg mx-auto my-10">
+    <div class="bg-white shadow rounded-lg p-8">
+        <h2 class="text-2xl font-bold text-blue-800 mb-6 text-center">
+            {% if form.instance.pk %}Update Task{% else %}Create Task{% endif %}
+        </h2>
+
+        <form method="post" novalidate>
+            {% csrf_token %}
+
+            {% if messages %}
+                <div class="mb-4">
+                    {% for message in messages %}
+                        <div class="px-4 py-2 rounded text-white
+                            {% if message.tags == 'error' %}bg-red-600{% elif message.tags == 'success' %}bg-green-600{% else %}bg-blue-600{% endif %}">
+                            {{ message }}
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+
+            {% if form.non_field_errors %}
+                <div class="mb-4 text-red-600">
+                    {% for error in form.non_field_errors %}
+                        <p>{{ error }}</p>
+                    {% endfor %}
+                </div>
+            {% endif %}
+
+            <div class="mb-4">
+                <label for="{{ form.title.id_for_label }}" class="block mb-2 text-sm font-medium text-gray-700">Title</label>
+                {{ form.title }}
+                {% if form.title.errors %}
+                    <p class="text-red-600 text-sm mt-1">{{ form.title.errors.0 }}</p>
+                {% endif %}
+            </div>
+
+            <div class="mb-4">
+                <label for="{{ form.description.id_for_label }}" class="block mb-2 text-sm font-medium text-gray-700">Description</label>
+                {{ form.description }}
+                {% if form.description.errors %}
+                    <p class="text-red-600 text-sm mt-1">{{ form.description.errors.0 }}</p>
+                {% endif %}
+            </div>
+
+            <div class="mb-4">
+                <label for="{{ form.assigned_to.id_for_label }}" class="block mb-2 text-sm font-medium text-gray-700">Assigned To</label>
+                {{ form.assigned_to }}
+                {% if form.assigned_to.errors %}
+                    <p class="text-red-600 text-sm mt-1">{{ form.assigned_to.errors.0 }}</p>
+                {% endif %}
+            </div>
+
+            <div class="mb-4">
+                <label for="{{ form.status.id_for_label }}" class="block mb-2 text-sm font-medium text-gray-700">Status</label>
+                {{ form.status }}
+                {% if form.status.errors %}
+                    <p class="text-red-600 text-sm mt-1">{{ form.status.errors.0 }}</p>
+                {% endif %}
+            </div>
+
+            <div class="mb-4">
+                <label for="{{ form.priority.id_for_label }}" class="block mb-2 text-sm font-medium text-gray-700">Priority</label>
+                {{ form.priority }}
+                {% if form.priority.errors %}
+                    <p class="text-red-600 text-sm mt-1">{{ form.priority.errors.0 }}</p>
+                {% endif %}
+            </div>
+
+            <div class="mb-6">
+                <label for="{{ form.due_date.id_for_label }}" class="block mb-2 text-sm font-medium text-gray-700">Due Date</label>
+                {{ form.due_date }}
+                {% if form.due_date.errors %}
+                    <p class="text-red-600 text-sm mt-1">{{ form.due_date.errors.0 }}</p>
+                {% endif %}
+            </div>
+
+            <button type="submit" class="w-full bg-blue-800 text-white font-semibold py-2 px-4 rounded hover:bg-blue-900 transition">
+                {% if form.instance.pk %}Update{% else %}Create{% endif %} Task
+            </button>
+        </form>
+    </div>
+</div>
+{% endblock %}

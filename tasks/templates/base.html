@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>CodeForge Engineering — Task Manager</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    {% load static %}
+    <!-- Tailwind CSS (offline) -->
+    <link rel="stylesheet" href="{% static 'css/tailwind-offline.css' %}">
+    <style>
+        .print-only { display: none; }
+        @media print {
+            header, aside, footer, .no-print { display: none !important; }
+            main { margin-left: 0 !important; padding-top: 0 !important; }
+            .print-only { display: block !important; }
+            .shadow, .shadow-md, .shadow-lg { box-shadow: none !important; }
+            body { background: #fff !important; }
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <!-- Fixed Header -->
+    <header class="fixed top-0 left-0 w-full bg-blue-800 text-white z-40 shadow-md">
+        <nav class="flex items-center justify-between px-6 py-3">
+            <div class="text-lg font-bold">
+                <a href="{% url 'role_redirect' %}">⚙ CodeForge Engineering</a>
+            </div>
+            <ul class="flex items-center space-x-4">
+                {% if user.is_authenticated %}
+                    <li class="text-sm">Logged in as <span class="font-semibold">{{ user.username }}</span> (<span class="capitalize">{{ user.role }}</span>)</li>
+                    <li>
+                        <a href="{% url 'notifications' %}" class="relative inline-flex items-center text-white text-sm hover:underline">
+                            🔔 Notifications
+                            {% if nav_unread_count %}
+                                <span class="ml-1 inline-flex items-center justify-center px-2 py-1 rounded-full text-xs font-bold bg-red-600 text-white">{{ nav_unread_count }}</span>
+                            {% endif %}
+                        </a>
+                    </li>
+                    {% if user.is_superuser %}
+                        <li><a href="{% url 'admin:index' %}" class="text-white underline text-sm">Django Admin</a></li>
+                    {% endif %}
+                    <li>
+                        <form action="{% url 'logout' %}" method="post">
+                            {% csrf_token %}
+                            <button type="submit" class="bg-red-600 px-4 py-2 rounded hover:bg-red-700 transition">Logout</button>
+                        </form>
+                    </li>
+                {% else %}
+                    {% url 'login' as login_url %}
+                    {% if request.path != login_url %}
+                    <li>
+                        <a href="{% url 'login' %}" class="bg-green-600 px-4 py-2 rounded hover:bg-green-700 transition">Login</a>
+                    </li>
+                    {% endif %}
+                {% endif %}
+            </ul>
+        </nav>
+    </header>
+
+    <!-- Fixed Aside Navigation (only when logged in) -->
+    {% if user.is_authenticated %}
+    <aside class="fixed top-16 left-0 h-[calc(100vh-4rem)] w-56 bg-white shadow-lg z-30 flex flex-col pt-8">
+        <nav class="flex flex-col space-y-4 px-6">
+                {% if user.is_superuser %}
+                    <a href="{% url 'manager_dashboard' %}" class="text-blue-800 hover:underline">PM Dashboard</a>
+                    <a href="{% url 'task_list' %}" class="text-blue-800 hover:underline">All Tasks</a>
+                    <a href="{% url 'task_create' %}" class="text-blue-800 hover:underline">Create Task</a>
+                    <a href="{% url 'engineer_list' %}" class="text-blue-800 hover:underline">Engineers</a>
+                    <a href="{% url 'register' %}" class="text-blue-800 hover:underline">Create New User</a>
+                    <a href="{% url 'reports' %}" class="text-blue-800 hover:underline">Reports</a>
+                {% elif user.role == 'manager' %}
+                    <a href="{% url 'manager_dashboard' %}" class="text-blue-800 hover:underline">PM Dashboard</a>
+                    <a href="{% url 'task_list' %}" class="text-blue-800 hover:underline">All Tasks</a>
+                    <a href="{% url 'task_create' %}" class="text-blue-800 hover:underline">Create Task</a>
+                    <a href="{% url 'engineer_list' %}" class="text-blue-800 hover:underline">Engineers</a>
+                    <a href="{% url 'register' %}" class="text-blue-800 hover:underline">Create New User</a>
+                    <a href="{% url 'reports' %}" class="text-blue-800 hover:underline">Reports</a>
+                {% elif user.role == 'worker' %}
+                    <a href="{% url 'worker_dashboard' %}" class="text-blue-800 hover:underline">Engineer Dashboard</a>
+                    <a href="{% url 'task_list' %}" class="text-blue-800 hover:underline">My Tasks</a>
+                    <a href="{% url 'reports' %}" class="text-blue-800 hover:underline">My Reports</a>
+                {% else %}
+                    <a href="{% url 'task_list' %}" class="text-blue-800 hover:underline">Tasks</a>
+                    <a href="{% url 'reports' %}" class="text-blue-800 hover:underline">Reports</a>
+                {% endif %}
+        </nav>
+    </aside>
+    {% endif %}
+
+    <!-- Main Content -->
+    <main class="{% if user.is_authenticated %}ml-56{% endif %} pt-20 px-8">
+        {% if messages %}
+            <div class="max-w-xl mx-auto mt-6">
+              {% for message in messages %}
+                <div class="mb-2 px-4 py-2 rounded shadow text-white
+                  {% if message.tags == 'error' %}bg-red-600{% elif message.tags == 'success' %}bg-green-600{% else %}bg-blue-600{% endif %}">
+                  {{ message }}
+                </div>
+              {% endfor %}
+            </div>
+        {% endif %}
+        {% block content %}
+        <!-- Page-specific content goes here -->
+        {% endblock %}
+    </main>
+
+    <!-- Footer -->
+    <footer class="mt-10 text-center text-gray-500 py-4">
+        &copy; {{ year|default:2025 }} CodeForge Engineering · Internal Task Manager
+    </footer>
+</body>
+</html>

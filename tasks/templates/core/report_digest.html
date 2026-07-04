@@ -1,0 +1,92 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>CodeForge Task Digest</title>
+  <style>
+    body { font-family: Helvetica, Arial, sans-serif; font-size: 11px; color: #111; }
+    h1 { color: #0b3fa0; margin-bottom: 2px; font-size: 20px; }
+    h2 { color: #0b3fa0; font-size: 14px; margin-top: 18px; margin-bottom: 4px; }
+    .meta { color: #555; margin: 0; }
+    .cards td { border: 1px solid #cfd8e3; padding: 8px; text-align: center; }
+    .cards .num { font-size: 20px; font-weight: bold; color: #0b3fa0; }
+    table { width: 100%; border-collapse: collapse; margin-top: 6px; }
+    th, td { padding: 5px 7px; border: 1px solid #ddd; }
+    th { background: #eef4ff; text-align: left; }
+    .overdue { color: #b00020; font-weight: bold; }
+    .muted { color: #777; }
+  </style>
+</head>
+<body>
+  <h1>CodeForge Engineering — Task Digest</h1>
+  <p class="meta">Generated: {{ generated_at|date:"M d, Y H:i" }}</p>
+
+  <h2>Summary</h2>
+  <table class="cards">
+    <tr>
+      <td><div class="num">{{ total_tasks }}</div>Total</td>
+      <td><div class="num">{{ pending }}</div>Pending</td>
+      <td><div class="num">{{ in_progress }}</div>In Progress</td>
+      <td><div class="num">{{ completed }}</div>Completed</td>
+      <td><div class="num">{{ overdue|length }}</div>Overdue</td>
+    </tr>
+  </table>
+
+  <h2>Per-Engineer Breakdown</h2>
+  <table>
+    <thead>
+      <tr><th>Engineer</th><th>Pending</th><th>In Progress</th><th>Completed</th><th>Total</th></tr>
+    </thead>
+    <tbody>
+      {% for row in per_engineer %}
+      <tr>
+        <td>{{ row.name }}</td>
+        <td>{{ row.pending }}</td>
+        <td>{{ row.in_progress }}</td>
+        <td>{{ row.completed }}</td>
+        <td>{{ row.total }}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="5" class="muted" style="text-align:center;">No engineers found</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <h2>Overdue Tasks</h2>
+  <table>
+    <thead>
+      <tr><th>Title</th><th>Engineer</th><th>Status</th><th>Due</th></tr>
+    </thead>
+    <tbody>
+      {% for task in overdue %}
+      <tr>
+        <td>{{ task.title }}</td>
+        <td>{{ task.assigned_to.username }}</td>
+        <td>{{ task.get_status_display }}</td>
+        <td class="overdue">{{ task.due_date|date:"M d, Y" }}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="4" class="muted" style="text-align:center;">No overdue tasks 🎉</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <h2>Completed in Last {{ window_days }} Day(s)</h2>
+  <table>
+    <thead>
+      <tr><th>Title</th><th>Engineer</th><th>Completed At</th></tr>
+    </thead>
+    <tbody>
+      {% for task in recently_completed %}
+      <tr>
+        <td>{{ task.title }}</td>
+        <td>{{ task.assigned_to.username }}</td>
+        <td>{{ task.completed_at|date:"M d, Y H:i" }}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="3" class="muted" style="text-align:center;">Nothing completed in this window</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</body>
+</html>

@@ -1,0 +1,26 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "ResumeAI (Next.js)",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "port": 3000,
+      "cwd": "C:\\Users\\doomzy\\Desktop\\Work\\PROJECTSS\\resume-builder"
+    },
+    {
+      "name": "FitZy2 (Expo)",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["expo", "start"],
+      "port": 8081,
+      "cwd": "C:\\Users\\doomzy\\Desktop\\Work\\PROJECTSS\\FitZy2"
+    },
+    {
+      "name": "TaskManagement (Django)",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["manage.py", "runserver"],
+      "port": 8000,
+      "cwd": "C:\\Users\\doomzy\\Desktop\\Work\\PROJECTSS\\TASKMANAPPS\\TaskManagement"
+    }
+  ]
+}

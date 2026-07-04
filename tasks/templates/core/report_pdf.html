@@ -1,0 +1,49 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Report - {{ report_user.username }}</title>
+  <style>
+    body { font-family: "Helvetica", Arial, sans-serif; font-size: 12px; color: #111; }
+    h1 { color: #0b5cff; margin-bottom: 0; }
+    .meta { margin-top: 0.25rem; color: #444; }
+    table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+    th, td { padding: 6px 8px; border: 1px solid #ddd; }
+    th { background: #f0f8ff; text-align: left; }
+  </style>
+</head>
+<body>
+  <h1>Task Report</h1>
+  <p class="meta">User: {{ report_user.get_full_name|default:report_user.username }} ({{ report_user.username }})</p>
+  <p class="meta">Generated: {% now "Y-m-d H:i" %}</p>
+
+  <p class="meta">Total: {{ total_tasks }} — Pending: {{ pending }} — In progress: {{ in_progress }} — Completed: {{ completed }}</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Title</th>
+        <th>Assigned To</th>
+        <th>Status</th>
+        <th>Created</th>
+        <th>Due</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for task in tasks %}
+      <tr>
+        <td>{{ task.title }}</td>
+        <td>{{ task.assigned_to.username }}</td>
+        <td>{{ task.status }}</td>
+        <td>{{ task.created_at|date:"Y-m-d" }}</td>
+        <td>{% if task.due_date %}{{ task.due_date|date:"Y-m-d" }}{% else %}—{% endif %}</td>
+      </tr>
+      {% empty %}
+      <tr>
+        <td colspan="5" style="text-align:center; color:#666; padding:1rem;">No tasks for selected filters</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</body>
+</html>

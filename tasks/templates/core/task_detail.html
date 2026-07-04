@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="max-w-3xl mx-auto my-10">
+    <div class="bg-white shadow rounded-lg p-8">
+        <h1 class="text-2xl font-bold text-blue-800 mb-4">{{ task.title }}</h1>
+
+        {% if task.description %}
+            <p class="mb-2"><span class="font-semibold text-gray-700">Description:</span> {{ task.description }}</p>
+        {% endif %}
+
+        <p class="mb-2"><span class="font-semibold text-gray-700">Assigned To:</span> {{ task.assigned_to.username }}</p>
+
+        <p class="mb-2"><span class="font-semibold text-gray-700">Status:</span>
+            {% if task.status == 'pending' %}
+                <span class="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-800">Pending</span>
+            {% elif task.status == 'in_progress' %}
+                <span class="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">In Progress</span>
+            {% elif task.status == 'completed' %}
+                <span class="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-800">Completed</span>
+            {% else %}
+                <span class="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-800">{{ task.status }}</span>
+            {% endif %}
+        </p>
+
+        <p class="mb-2"><span class="font-semibold text-gray-700">Priority:</span>
+            {% if task.priority == 'high' %}
+                <span class="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-800">High</span>
+            {% elif task.priority == 'medium' %}
+                <span class="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-orange-100 text-orange-800">Medium</span>
+            {% else %}
+                <span class="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-700">Low</span>
+            {% endif %}
+        </p>
+
+        <p class="mb-2"><span class="font-semibold text-gray-700">Created:</span> {{ task.created_at|date:"M d, Y" }}</p>
+        <p class="mb-2"><span class="font-semibold text-gray-700">Updated:</span> {{ task.updated_at|date:"M d, Y" }}</p>
+        {% if task.completed_at %}
+            <p class="mb-2"><span class="font-semibold text-gray-700">Completed:</span>
+                <span class="text-green-700 font-semibold">{{ task.completed_at|date:"M d, Y H:i" }}</span>
+            </p>
+        {% endif %}
+
+        <p class="mb-2"><span class="font-semibold text-gray-700">Due Date:</span>
+            {% if task.due_date %}
+                {{ task.due_date|date:"M d, Y" }}
+            {% else %}
+                <span class="text-gray-500">No due date</span>
+            {% endif %}
+        </p>
+
+        <div class="mt-4 flex space-x-4">
+            {% if user.is_authenticated %}
+                {% if user.is_superuser or user.role == 'manager' %}
+                    <a href="{% url 'task_update' task.pk %}" class="bg-yellow-600 text-white px-4 py-2 rounded hover:bg-yellow-700 transition">Edit</a>
+                    <a href="{% url 'task_delete' task.pk %}" class="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 transition">Delete</a>
+                {% elif user.role == 'worker' and task.assigned_to == user %}
+                    <a href="{% url 'worker_task_update' task.pk %}" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition">Update Status</a>
+                {% endif %}
+            {% endif %}
+            <a href="{% url 'task_list' %}" class="bg-gray-200 text-gray-700 px-4 py-2 rounded hover:bg-gray-300 transition">Back to Tasks</a>
+        </div>
+    </div>
+
+    <!-- Attachments -->
+    <div class="bg-white shadow rounded-lg p-8 mt-6">
+        <h2 class="text-lg font-bold text-blue-800 mb-4">Attachments</h2>
+        {% if attachments %}
+            <ul style="list-style:none;padding-left:0" class="divide-y divide-gray-100 mb-4">
+                {% for att in attachments %}
+                <li class="py-2 flex items-center justify-between text-sm">
+                    <a href="{{ att.file.url }}" target="_blank" class="text-blue-600 hover:underline">📎 {{ att.filename }}</a>
+                    <span class="text-gray-500 text-xs">
+                        {{ att.uploaded_by.username|default:"—" }} · {{ att.uploaded_at|date:"M d, Y H:i" }}
+                    </span>
+                </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p class="text-gray-500 text-sm mb-4">No files attached yet.</p>
+        {% endif %}
+
+        <form method="post" action="{% url 'add_attachment' task.pk %}" enctype="multipart/form-data" class="flex items-center gap-3">
+            {% csrf_token %}
+            {{ attachment_form.file }}
+            <button type="submit" class="bg-blue-800 text-white px-4 py-2 rounded text-sm hover:bg-blue-900 transition">Upload</button>
+        </form>
+    </div>
+
+    <!-- Comments / discussion -->
+    <div class="bg-white shadow rounded-lg p-8 mt-6">
+        <h2 class="text-lg font-bold text-blue-800 mb-4">Discussion</h2>
+        {% if comments %}
+            <ul style="list-style:none;padding-left:0" class="space-y-3 mb-6">
+                {% for c in comments %}
+                <li class="border border-gray-100 rounded p-3">
+                    <div class="flex items-center justify-between mb-1">
+                        <span class="font-semibold text-sm text-gray-800">{{ c.author.username }}
+                            <span class="text-xs font-normal text-gray-400">({{ c.author.role }})</span>
+                        </span>
+                        <span class="text-xs text-gray-400">{{ c.created_at|date:"M d, Y H:i" }}</span>
+                    </div>
+                    <p class="text-sm text-gray-700 whitespace-pre-line">{{ c.body }}</p>
+                </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p class="text-gray-500 text-sm mb-6">No comments yet. Start the discussion.</p>
+        {% endif %}
+
+        <form method="post" action="{% url 'add_comment' task.pk %}">
+            {% csrf_token %}
+            {{ comment_form.body }}
+            <button type="submit" class="mt-3 bg-blue-800 text-white px-4 py-2 rounded text-sm hover:bg-blue-900 transition">Post Comment</button>
+        </form>
+    </div>
+</div>
+{% endblock %}

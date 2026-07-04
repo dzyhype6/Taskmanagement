@@ -1,0 +1,21 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Run Django Server",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/manage.py",
+      "args": ["runserver", "8000"],
+      "django": true,
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}"
+      },
+      "serverReadyAction": {
+        "pattern": "Starting development server at (http://\\S+)",
+        "uriFormat": "%s",
+        "action": "openExternally"
+      }
+    }
+  ]
+}

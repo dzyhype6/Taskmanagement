@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="max-w-2xl mx-auto">
+    <h1 class="text-2xl font-bold mb-6 text-blue-800">Notifications</h1>
+
+    <div class="bg-white shadow rounded-lg divide-y divide-gray-200">
+        {% for note in notes %}
+        <a href="{% if note.link %}{% url 'notification_open' note.pk %}{% else %}#{% endif %}"
+           class="block px-4 py-3 hover:bg-gray-50 {% if not note.is_read %}bg-blue-50{% endif %}">
+            <div class="text-sm text-gray-900">{{ note.message }}</div>
+            <div class="text-xs text-gray-500 mt-1">{{ note.created_at|date:"M d, Y · H:i" }}</div>
+        </a>
+        {% empty %}
+        <div class="px-4 py-6 text-center text-gray-500">No notifications yet.</div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}
