@@ -276,6 +276,33 @@ class WorkerPayVisibilityTests(TestCase):
         self.assertContains(resp, 'Completed work')
         self.assertEqual(resp.context['total_paid'], Decimal('500'))
 
+    def test_engineer_does_not_see_per_task_amount(self):
+        eng = User.objects.create_user(username='e2', password='pw', role='worker',
+                                       pay_type='per_task', task_rate=Decimal('500'))
+        pm = User.objects.create_user(username='pm2', password='pw', role='manager')
+        task = Task.objects.create(title='secret', assigned_to=eng, status='completed',
+                                   approved=True, pay_amount=Decimal('12345'))
+        # engineer must NOT see the per-task amount on the task page
+        self.client.login(username='e2', password='pw')
+        self.assertNotContains(self.client.get(reverse('task_detail', args=[task.pk])), '12345')
+        # the manager DOES
+        self.client.logout(); self.client.login(username='pm2', password='pw')
+        self.assertContains(self.client.get(reverse('task_detail', args=[task.pk])), '12345')
+
+    def test_engineer_payslip_shows_total_not_per_task(self):
+        from tasks.models import Payment
+        eng = User.objects.create_user(username='e3', password='pw', role='worker', pay_type='per_task')
+        pay = Payment.objects.create(engineer=eng, basis='per_task', amount=Decimal('700'), task_count=2)
+        Task.objects.create(title='p1', assigned_to=eng, status='completed', approved=True,
+                            pay_amount=Decimal('321'), payment=pay)
+        Task.objects.create(title='p2', assigned_to=eng, status='completed', approved=True,
+                            pay_amount=Decimal('379'), payment=pay)
+        self.client.login(username='e3', password='pw')
+        resp = self.client.get(reverse('payment_detail', args=[pay.pk]))
+        self.assertContains(resp, '700')      # the payslip total is a total -> visible
+        self.assertNotContains(resp, '321')   # per-task amounts hidden
+        self.assertNotContains(resp, '379')
+
 
 class TaskOverdueTests(TestCase):
     def test_is_overdue(self):

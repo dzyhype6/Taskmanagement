@@ -67,14 +67,20 @@
             {% endif %}
         </p>
 
-        <!-- Payment status -->
-        <p class="mb-2"><span class="font-semibold text-gray-700">Pay:</span>
-            {% if task.pay_amount %}KES {{ task.pay_amount }}{% else %}<span class="text-gray-500">—</span>{% endif %}
+        <!-- Payment status (per-task amount is visible to managers only) -->
+        <p class="mb-2">
+            <span class="font-semibold text-gray-700">{% if user.is_superuser or user.role == 'manager' %}Pay:{% else %}Payment:{% endif %}</span>
+            {% if user.is_superuser or user.role == 'manager' %}
+                {% if task.pay_amount %}KES {{ task.pay_amount }}{% else %}<span class="text-gray-500">—</span>{% endif %}
+            {% endif %}
             {% if task.approved %}
                 <span class="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">Approved for payment</span>
             {% endif %}
             {% if task.is_paid %}
                 <a href="{% url 'payment_detail' task.payment_id %}" class="ml-1 inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-gray-200 text-gray-700 hover:underline">Paid ✓</a>
+            {% endif %}
+            {% if not task.approved and not task.is_paid and not user.is_superuser and user.role != 'manager' %}
+                <span class="text-gray-500 text-sm">not yet approved</span>
             {% endif %}
         </p>
 
