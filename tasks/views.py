@@ -86,11 +86,11 @@ def engineer_detail(request, pk):
         return redirect('worker_dashboard')
     engineer = get_object_or_404(User, pk=pk, role='worker')
     tasks = Task.objects.filter(assigned_to=engineer).order_by('-created_at')
-    # Payment snapshot for the header cards (per-task earnings).
-    approved_qs = tasks.filter(approved=True)
-    earned = approved_qs.aggregate(s=Sum('pay_amount'))['s'] or Decimal('0')
-    paid = approved_qs.filter(payment__isnull=False).aggregate(s=Sum('pay_amount'))['s'] or Decimal('0')
-    payable_tasks = approved_qs.filter(payment__isnull=True).count()
+    # Payment snapshot for the header cards (per-task earnings, net of late penalties).
+    approved_list = list(tasks.filter(approved=True))
+    earned = sum((t.net_pay for t in approved_list), Decimal('0'))
+    paid = sum((t.net_pay for t in approved_list if t.is_paid), Decimal('0'))
+    payable_tasks = sum(1 for t in approved_list if not t.is_paid)
     # Time snapshot (all pay types accrue hours; only hourly staff bill them).
     logs = TimeLog.objects.filter(user=engineer)
     logged_hours = logs.aggregate(s=Sum('hours'))['s'] or Decimal('0')
@@ -219,6 +219,17 @@ class TaskDetailView(LoginRequiredMixin, DetailView):
         ctx['logged_hours'] = self.object.logged_hours
         ctx['timelog_form'] = TimeLogForm()
         ctx['can_log_time'] = _can_access_task(self.request.user, self.object)
+        # "Cost of this work" (managers only) — what this task is paying.
+        eng = self.object.assigned_to
+        if eng.pay_type == 'hourly':
+            ctx['work_cost_kind'] = 'hourly'
+            ctx['work_cost'] = self.object.logged_hours * (eng.hourly_rate or Decimal('0'))
+        elif eng.pay_type == 'per_task':
+            ctx['work_cost_kind'] = 'per_task'
+            ctx['work_cost'] = self.object.net_pay
+        else:
+            ctx['work_cost_kind'] = 'monthly'
+            ctx['work_cost'] = None
         ctx['comment_form'] = TaskCommentForm()
         ctx['attachment_form'] = TaskAttachmentForm()
         return ctx
@@ -554,7 +565,8 @@ def run_payment(request, pk):
             if not unpaid:
                 messages.error(request, f"{engineer.username} has no approved, unpaid tasks to pay.")
                 return redirect('engineer_detail', pk=engineer.pk)
-            amount = sum((t.pay_amount or Decimal('0')) for t in unpaid)
+            # net_pay applies any late penalty to each task.
+            amount = sum((t.net_pay for t in unpaid), Decimal('0'))
             payment = Payment.objects.create(
                 engineer=engineer, basis='per_task', period=period,
                 amount=amount, task_count=len(unpaid), created_by=request.user,
@@ -720,9 +732,10 @@ def _build_manager_report(request):
         total = et.count()
         completed = et.filter(status='completed').count()
         approved = et.filter(approved=True).count()
-        # earned = approved tasks' pay; paid = approved tasks already on a payslip
-        earned = et.filter(approved=True).aggregate(s=Sum('pay_amount'))['s'] or Decimal('0')
-        paid = et.filter(approved=True, payment__isnull=False).aggregate(s=Sum('pay_amount'))['s'] or Decimal('0')
+        # earned = approved tasks' pay (net of late penalties); paid = those on a payslip
+        approved_list = list(et.filter(approved=True))
+        earned = sum((t.net_pay for t in approved_list), Decimal('0'))
+        paid = sum((t.net_pay for t in approved_list if t.is_paid), Decimal('0'))
         overdue = sum(1 for t in et if t.is_overdue)
         # Overall progress = average of every task's progress % (completed=100,
         # pending=0, in-progress = the engineer's reported estimate). This is a

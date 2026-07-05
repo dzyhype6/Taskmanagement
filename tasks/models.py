@@ -64,6 +64,9 @@ class Task(models.Model):
     # What this task pays its engineer once the manager approves it (per-task
     # engineers). For monthly engineers it is simply informational.
     pay_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    # % deducted from this task's pay if it is completed after the deadline.
+    late_penalty_percent = models.PositiveSmallIntegerField(
+        default=0, help_text="Percent of pay deducted if finished after the deadline (0 = none).")
     # A completed task must be approved by a manager before it counts for pay.
     approved = models.BooleanField(default=False)
     approved_at = models.DateTimeField(null=True, blank=True)
@@ -141,6 +144,26 @@ class Task(models.Model):
         from decimal import Decimal
         total = self.time_logs.aggregate(s=models.Sum('hours'))['s']
         return total or Decimal('0')
+
+    @property
+    def was_late(self):
+        """True if the task was completed after its deadline."""
+        return bool(self.completed_at and self.deadline and self.completed_at > self.deadline)
+
+    @property
+    def penalty_amount(self):
+        """KES deducted from this task's pay for finishing late."""
+        from decimal import Decimal, ROUND_HALF_UP
+        if self.was_late and self.late_penalty_percent:
+            amt = (self.pay_amount or Decimal('0')) * Decimal(self.late_penalty_percent) / Decimal('100')
+            return amt.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        return Decimal('0.00')
+
+    @property
+    def net_pay(self):
+        """Task pay after any late penalty (what a per-task engineer is paid)."""
+        from decimal import Decimal
+        return (self.pay_amount or Decimal('0')) - self.penalty_amount
 
     @property
     def is_paid(self):

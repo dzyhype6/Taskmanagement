@@ -23,14 +23,23 @@ class TaskForm(forms.ModelForm):
         help_text="Estimated hours to complete (optional).",
     )
 
+    late_penalty_percent = forms.IntegerField(
+        required=False, min_value=0, max_value=100, initial=0,
+        widget=forms.NumberInput(attrs={'min': '0', 'max': '100', 'placeholder': '0'}),
+        help_text="Percent deducted from this task's pay if finished after the deadline (0 = none).",
+    )
+
     class Meta:
         model = Task
         fields = ['title', 'description', 'assigned_to', 'status', 'priority',
-                  'due_date', 'due_time', 'estimated_hours', 'pay_amount']
+                  'due_date', 'due_time', 'estimated_hours', 'pay_amount', 'late_penalty_percent']
         widgets = {
             'due_date': forms.DateInput(attrs={'type': 'date'}),
             'due_time': forms.TimeInput(attrs={'type': 'time'}),
         }
+
+    def clean_late_penalty_percent(self):
+        return self.cleaned_data.get('late_penalty_percent') or 0
 
     def clean_pay_amount(self):
         # The model column is NOT NULL; coerce a blank entry to 0.

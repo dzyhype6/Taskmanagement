@@ -74,19 +74,36 @@
             {% if task.estimated_hours %}<span class="text-gray-500">· {{ task.estimated_hours }}h estimated</span>{% endif %}
         </p>
 
-        <!-- Payment status (per-task amount is visible to managers only) -->
-        <p class="mb-2">
-            <span class="font-semibold text-gray-700">{% if user.is_superuser or user.role == 'manager' %}Pay:{% else %}Payment:{% endif %}</span>
-            {% if user.is_superuser or user.role == 'manager' %}
-                {% if task.pay_amount %}KES {{ task.pay_amount }}{% else %}<span class="text-gray-500">—</span>{% endif %}
+        <!-- Cost of this work (managers only) -->
+        {% if user.is_superuser or user.role == 'manager' %}
+        <div class="mb-2 p-3 bg-gray-50 border border-gray-200 rounded">
+            <span class="font-semibold text-gray-700">Cost of this work:</span>
+            {% if work_cost_kind == 'hourly' %}
+                <span class="font-bold text-blue-800">KES {{ work_cost }}</span>
+                <span class="text-gray-500 text-sm">({{ logged_hours }}h × KES {{ task.assigned_to.hourly_rate }}/h)</span>
+            {% elif work_cost_kind == 'per_task' %}
+                <span class="font-bold text-blue-800">KES {{ work_cost }}</span>
+                {% if task.penalty_amount %}
+                    <span class="text-red-600 text-sm">(was KES {{ task.pay_amount }}, −KES {{ task.penalty_amount }} late penalty {{ task.late_penalty_percent }}%)</span>
+                {% elif task.late_penalty_percent %}
+                    <span class="text-gray-500 text-sm">(late penalty {{ task.late_penalty_percent }}% applies if overdue)</span>
+                {% endif %}
+            {% else %}
+                <span class="text-gray-500 text-sm">Salaried (monthly) — no per-task cost</span>
             {% endif %}
+        </div>
+        {% endif %}
+
+        <!-- Payment status -->
+        <p class="mb-2">
+            <span class="font-semibold text-gray-700">Payment:</span>
             {% if task.approved %}
-                <span class="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">Approved for payment</span>
+                <span class="ml-1 inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">Approved for payment</span>
             {% endif %}
             {% if task.is_paid %}
                 <a href="{% url 'payment_detail' task.payment_id %}" class="ml-1 inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-gray-200 text-gray-700 hover:underline">Paid ✓</a>
             {% endif %}
-            {% if not task.approved and not task.is_paid and not user.is_superuser and user.role != 'manager' %}
+            {% if not task.approved and not task.is_paid %}
                 <span class="text-gray-500 text-sm">not yet approved</span>
             {% endif %}
         </p>

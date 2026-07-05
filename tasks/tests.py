@@ -362,6 +362,53 @@ class TimeTrackingTests(TestCase):
         self.assertFalse(Payment.objects.filter(engineer=self.eng).exists())
 
 
+class LatePenaltyTests(TestCase):
+    def setUp(self):
+        self.pm = User.objects.create_user(username='pm', password='pw', role='manager')
+        self.eng = User.objects.create_user(username='eng', password='pw', role='worker',
+                                             pay_type='per_task', task_rate=Decimal('1000'))
+
+    def _completed_task(self, late, penalty=20):
+        from datetime import timedelta
+        due = timezone.localdate() - timedelta(days=1)  # due yesterday
+        t = Task.objects.create(title='t', assigned_to=self.eng, status='in_progress',
+                                due_date=due, pay_amount=Decimal('1000'),
+                                late_penalty_percent=penalty)
+        t.status = 'completed'
+        t.save()  # stamps completed_at = now (which is after yesterday's deadline => late)
+        if not late:
+            # move the deadline into the future so it's not late
+            t.due_date = timezone.localdate() + timedelta(days=1)
+            t.save()
+        return t
+
+    def test_late_task_incurs_penalty(self):
+        t = self._completed_task(late=True, penalty=20)
+        self.assertTrue(t.was_late)
+        self.assertEqual(t.penalty_amount, Decimal('200.00'))   # 20% of 1000
+        self.assertEqual(t.net_pay, Decimal('800.00'))
+
+    def test_on_time_task_full_pay(self):
+        t = self._completed_task(late=False, penalty=20)
+        self.assertFalse(t.was_late)
+        self.assertEqual(t.penalty_amount, Decimal('0.00'))
+        self.assertEqual(t.net_pay, Decimal('1000'))
+
+    def test_payment_uses_net_after_penalty(self):
+        from tasks.models import Payment
+        t = self._completed_task(late=True, penalty=25)
+        t.approved = True; t.approved_at = timezone.now(); t.save()
+        self.client.login(username='pm', password='pw')
+        self.client.post(reverse('run_payment', args=[self.eng.pk]))
+        pay = Payment.objects.get(engineer=self.eng)
+        self.assertEqual(pay.amount, Decimal('750.00'))   # 1000 − 25%
+
+    def test_no_penalty_when_percent_zero(self):
+        t = self._completed_task(late=True, penalty=0)
+        self.assertTrue(t.was_late)
+        self.assertEqual(t.net_pay, Decimal('1000'))
+
+
 class DeadlineTimeTests(TestCase):
     def test_overdue_uses_time_of_day(self):
         from datetime import time as dtime

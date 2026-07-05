@@ -28,16 +28,20 @@
                     <th class="px-3 py-2 text-left text-xs font-medium text-gray-600 uppercase">Completed</th>
                     {% if user.is_superuser or user.role == 'manager' %}
                     <th class="px-3 py-2 text-right text-xs font-medium text-gray-600 uppercase">Pay</th>
+                    <th class="px-3 py-2 text-right text-xs font-medium text-gray-600 uppercase">Late penalty</th>
+                    <th class="px-3 py-2 text-right text-xs font-medium text-gray-600 uppercase">Net</th>
                     {% endif %}
                 </tr>
             </thead>
             <tbody class="divide-y divide-gray-100">
                 {% for t in tasks %}
                 <tr>
-                    <td class="px-3 py-2">{{ t.title }}</td>
+                    <td class="px-3 py-2">{{ t.title }}{% if t.was_late %} <span class="text-red-600 text-xs">(late)</span>{% endif %}</td>
                     <td class="px-3 py-2 text-gray-500">{{ t.completed_at|date:"M d, Y"|default:"—" }}</td>
                     {% if user.is_superuser or user.role == 'manager' %}
                     <td class="px-3 py-2 text-right">KES {{ t.pay_amount }}</td>
+                    <td class="px-3 py-2 text-right">{% if t.penalty_amount %}<span class="text-red-600">− KES {{ t.penalty_amount }}</span>{% else %}—{% endif %}</td>
+                    <td class="px-3 py-2 text-right font-semibold">KES {{ t.net_pay }}</td>
                     {% endif %}
                 </tr>
                 {% endfor %}
