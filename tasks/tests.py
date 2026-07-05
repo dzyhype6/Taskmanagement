@@ -304,6 +304,79 @@ class WorkerPayVisibilityTests(TestCase):
         self.assertNotContains(resp, '379')
 
 
+class TimeTrackingTests(TestCase):
+    def setUp(self):
+        from tasks.models import TimeLog
+        self.TimeLog = TimeLog
+        self.pm = User.objects.create_user(username='pm', password='pw', role='manager')
+        self.eng = User.objects.create_user(username='eng', password='pw', role='worker',
+                                             pay_type='hourly', hourly_rate=Decimal('20'))
+        self.task = Task.objects.create(title='t', assigned_to=self.eng, status='in_progress',
+                                        estimated_hours=Decimal('10'))
+
+    def test_engineer_logs_time(self):
+        self.client.login(username='eng', password='pw')
+        resp = self.client.post(reverse('add_timelog', args=[self.task.pk]),
+                                {'hours': '2.5', 'work_date': '2026-07-05', 'note': 'setup'})
+        self.assertEqual(resp.status_code, 302)
+        self.task.refresh_from_db()
+        self.assertEqual(self.task.logged_hours, Decimal('2.5'))
+
+    def test_hours_reject_zero(self):
+        self.client.login(username='eng', password='pw')
+        self.client.post(reverse('add_timelog', args=[self.task.pk]),
+                         {'hours': '0', 'work_date': '2026-07-05'})
+        self.assertEqual(self.task.time_logs.count(), 0)
+
+    def test_hourly_payment_pays_logged_hours(self):
+        from tasks.models import Payment
+        self.TimeLog.objects.create(task=self.task, user=self.eng, hours=Decimal('3'))
+        self.TimeLog.objects.create(task=self.task, user=self.eng, hours=Decimal('1.5'))
+        self.client.login(username='pm', password='pw')
+        self.client.post(reverse('run_payment', args=[self.eng.pk]), {'period': 'wk1'})
+        pay = Payment.objects.get(engineer=self.eng)
+        self.assertEqual(pay.basis, 'hourly')
+        self.assertEqual(pay.hours, Decimal('4.5'))
+        self.assertEqual(pay.amount, Decimal('90.00'))   # 4.5h × 20
+        # logs are locked to the payslip
+        self.assertTrue(all(l.payment_id == pay.id for l in self.task.time_logs.all()))
+        # a second run finds nothing unpaid
+        self.client.post(reverse('run_payment', args=[self.eng.pk]))
+        self.assertEqual(Payment.objects.filter(engineer=self.eng).count(), 1)
+
+    def test_paid_time_cannot_be_removed(self):
+        from tasks.models import Payment
+        log = self.TimeLog.objects.create(task=self.task, user=self.eng, hours=Decimal('2'))
+        self.client.login(username='pm', password='pw')
+        self.client.post(reverse('run_payment', args=[self.eng.pk]))
+        # try to delete the now-paid log
+        self.client.post(reverse('delete_timelog', args=[log.pk]))
+        self.assertTrue(self.TimeLog.objects.filter(pk=log.pk).exists())
+
+    def test_hourly_needs_rate(self):
+        from tasks.models import Payment
+        self.eng.hourly_rate = Decimal('0'); self.eng.save()
+        self.TimeLog.objects.create(task=self.task, user=self.eng, hours=Decimal('2'))
+        self.client.login(username='pm', password='pw')
+        self.client.post(reverse('run_payment', args=[self.eng.pk]))
+        self.assertFalse(Payment.objects.filter(engineer=self.eng).exists())
+
+
+class DeadlineTimeTests(TestCase):
+    def test_overdue_uses_time_of_day(self):
+        from datetime import time as dtime
+        eng = User.objects.create_user(username='e', password='p', role='worker')
+        today = timezone.localdate()
+        # due today but at 00:01 -> already past -> overdue
+        early = Task.objects.create(title='early', assigned_to=eng, status='pending',
+                                    due_date=today, due_time=dtime(0, 1))
+        # due today at 23:59 -> not yet past -> not overdue
+        late = Task.objects.create(title='late', assigned_to=eng, status='pending',
+                                   due_date=today, due_time=dtime(23, 59))
+        self.assertTrue(early.is_overdue)
+        self.assertFalse(late.is_overdue)
+
+
 class TaskOverdueTests(TestCase):
     def test_is_overdue(self):
         eng = User.objects.create_user(username='e', password='p', role='worker')

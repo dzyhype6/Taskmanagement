@@ -9,11 +9,7 @@
         </div>
         <div class="text-right">
             <p class="text-sm text-gray-600">Total tasks: <span class="font-semibold">{{ tasks|length }}</span></p>
-            <p class="text-sm text-gray-600">Pending / In progress / Completed:
-                <span class="font-semibold">
-                    {{ tasks|dictsort:"status"|length }}
-                </span>
-            </p>
+            <p class="text-sm text-gray-600">Hours logged: <span class="font-semibold">{{ logged_hours }}h</span></p>
         </div>
     </div>
 

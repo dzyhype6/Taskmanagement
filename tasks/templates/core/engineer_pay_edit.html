@@ -18,6 +18,11 @@
                 {{ form.task_rate }}
                 <p class="text-xs text-gray-500 mt-1">{{ form.task_rate.help_text }}</p>
             </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Rate per hour (KES)</label>
+                {{ form.hourly_rate }}
+                <p class="text-xs text-gray-500 mt-1">{{ form.hourly_rate.help_text }}</p>
+            </div>
             <div class="flex gap-3 pt-2">
                 <button type="submit" class="bg-blue-800 text-white px-4 py-2 rounded hover:bg-blue-900 transition">Save</button>
                 <a href="{% url 'engineer_detail' engineer.pk %}" class="bg-gray-200 text-gray-700 px-4 py-2 rounded hover:bg-gray-300 transition">Cancel</a>

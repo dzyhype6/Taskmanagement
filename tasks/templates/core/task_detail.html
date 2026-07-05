@@ -59,12 +59,19 @@
             </p>
         {% endif %}
 
-        <p class="mb-2"><span class="font-semibold text-gray-700">Due Date:</span>
+        <p class="mb-2"><span class="font-semibold text-gray-700">Due:</span>
             {% if task.due_date %}
-                {{ task.due_date|date:"M d, Y" }}
+                {{ task.due_date|date:"M d, Y" }}{% if task.due_time %} at {{ task.due_time|time:"g:i A" }}{% endif %}
+                {% if task.is_overdue %}<span class="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700">Overdue</span>{% endif %}
             {% else %}
                 <span class="text-gray-500">No due date</span>
             {% endif %}
+        </p>
+
+        <!-- Time: estimate vs logged -->
+        <p class="mb-2"><span class="font-semibold text-gray-700">Time:</span>
+            <span class="text-gray-800">{{ logged_hours }}h logged</span>
+            {% if task.estimated_hours %}<span class="text-gray-500">· {{ task.estimated_hours }}h estimated</span>{% endif %}
         </p>
 
         <!-- Payment status (per-task amount is visible to managers only) -->
@@ -103,6 +110,47 @@
             {% endif %}
             <a href="{% url 'task_list' %}" class="bg-gray-200 text-gray-700 px-4 py-2 rounded hover:bg-gray-300 transition">Back to Tasks</a>
         </div>
+    </div>
+
+    <!-- Time log -->
+    <div class="bg-white shadow rounded-lg p-8 mt-6">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-lg font-bold text-blue-800">Time log</h2>
+            <span class="text-sm text-gray-600">{{ logged_hours }}h total{% if task.estimated_hours %} · {{ task.estimated_hours }}h estimated{% endif %}</span>
+        </div>
+        {% if time_logs %}
+            <ul style="list-style:none;padding-left:0" class="divide-y divide-gray-100 mb-4">
+                {% for log in time_logs %}
+                <li class="py-2 flex items-center justify-between text-sm">
+                    <div>
+                        <span class="font-semibold text-gray-800">{{ log.hours }}h</span>
+                        <span class="text-gray-500">· {{ log.user.username }} · {{ log.work_date|date:"M d, Y" }}</span>
+                        {% if log.note %}<span class="text-gray-600">— {{ log.note }}</span>{% endif %}
+                        {% if log.is_paid %}<span class="ml-1 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-200 text-gray-700">paid</span>{% endif %}
+                    </div>
+                    {% if not log.is_paid %}
+                        {% if user.is_superuser or user.role == 'manager' or log.user == user %}
+                        <form method="post" action="{% url 'delete_timelog' log.pk %}">
+                            {% csrf_token %}
+                            <button type="submit" class="text-red-500 hover:text-red-700 text-xs">Remove</button>
+                        </form>
+                        {% endif %}
+                    {% endif %}
+                </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p class="text-gray-500 text-sm mb-4">No time logged yet.</p>
+        {% endif %}
+        {% if can_log_time %}
+        <form method="post" action="{% url 'add_timelog' task.pk %}" class="grid grid-cols-1 sm:grid-cols-4 gap-2 items-end">
+            {% csrf_token %}
+            <div><label class="block text-xs text-gray-600 mb-1">Hours</label>{{ timelog_form.hours }}</div>
+            <div><label class="block text-xs text-gray-600 mb-1">Date</label>{{ timelog_form.work_date }}</div>
+            <div><label class="block text-xs text-gray-600 mb-1">Note</label>{{ timelog_form.note }}</div>
+            <button type="submit" class="bg-blue-800 text-white px-4 py-2 rounded text-sm hover:bg-blue-900 transition">Log time</button>
+        </form>
+        {% endif %}
     </div>
 
     <!-- Checklist / subtasks -->

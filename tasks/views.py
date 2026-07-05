@@ -20,10 +20,10 @@ from django.db import transaction
 from django.db.models import Q, Sum, Avg
 from django.utils import timezone
 from decimal import Decimal
-from .models import Task, User, Notification, Payment, SubTask
+from .models import Task, User, Notification, Payment, SubTask, TimeLog
 from .forms import (
     TaskForm, WorkerTaskStatusForm, ReportFilterForm,
-    TaskCommentForm, TaskAttachmentForm, EngineerPayForm,
+    TaskCommentForm, TaskAttachmentForm, EngineerPayForm, TimeLogForm,
 )
 from .services import notify, notify_managers
 from django.contrib import messages
@@ -86,11 +86,16 @@ def engineer_detail(request, pk):
         return redirect('worker_dashboard')
     engineer = get_object_or_404(User, pk=pk, role='worker')
     tasks = Task.objects.filter(assigned_to=engineer).order_by('-created_at')
-    # Payment snapshot for the header cards.
+    # Payment snapshot for the header cards (per-task earnings).
     approved_qs = tasks.filter(approved=True)
     earned = approved_qs.aggregate(s=Sum('pay_amount'))['s'] or Decimal('0')
     paid = approved_qs.filter(payment__isnull=False).aggregate(s=Sum('pay_amount'))['s'] or Decimal('0')
     payable_tasks = approved_qs.filter(payment__isnull=True).count()
+    # Time snapshot (all pay types accrue hours; only hourly staff bill them).
+    logs = TimeLog.objects.filter(user=engineer)
+    logged_hours = logs.aggregate(s=Sum('hours'))['s'] or Decimal('0')
+    unpaid_hours = logs.filter(payment__isnull=True).aggregate(s=Sum('hours'))['s'] or Decimal('0')
+    hourly_unpaid = unpaid_hours * (engineer.hourly_rate or Decimal('0'))
     return render(request, 'core/engineer_detail.html', {
         'engineer': engineer,
         'tasks': tasks,
@@ -99,6 +104,9 @@ def engineer_detail(request, pk):
         'paid': paid,
         'unpaid': earned - paid,
         'payable_tasks': payable_tasks,
+        'logged_hours': logged_hours,
+        'unpaid_hours': unpaid_hours,
+        'hourly_unpaid': hourly_unpaid,
         'payments': engineer.payments.all()[:10],
     })
 
@@ -112,11 +120,14 @@ def worker_dashboard(request):
     # What the engineer has actually been paid so far (their per-task payslips
     # plus any monthly salary payments recorded for them).
     total_paid = user.payments.aggregate(s=Sum('amount'))['s'] or Decimal('0')
+    # Their own logged effort (hours) — visible to the engineer.
+    logged_hours = TimeLog.objects.filter(user=user).aggregate(s=Sum('hours'))['s'] or Decimal('0')
     context = {
         'tasks': tasks,
         'worker': user,
         'completed_tasks': completed,
         'total_paid': total_paid,
+        'logged_hours': logged_hours,
         'pay_type': user.get_pay_type_display(),
     }
     return render(request, 'core/worker_dashboard.html', context)
@@ -204,6 +215,10 @@ class TaskDetailView(LoginRequiredMixin, DetailView):
         ctx['subtasks'] = self.object.subtasks.all()
         ctx['subtask_counts'] = self.object.subtask_counts
         ctx['can_edit_subtasks'] = _can_access_task(self.request.user, self.object)
+        ctx['time_logs'] = self.object.time_logs.select_related('user')
+        ctx['logged_hours'] = self.object.logged_hours
+        ctx['timelog_form'] = TimeLogForm()
+        ctx['can_log_time'] = _can_access_task(self.request.user, self.object)
         ctx['comment_form'] = TaskCommentForm()
         ctx['attachment_form'] = TaskAttachmentForm()
         return ctx
@@ -365,6 +380,47 @@ def delete_subtask(request, pk):
     return redirect('task_detail', pk=task.pk)
 
 
+# --- Time logging ---
+
+@login_required
+def add_timelog(request, pk):
+    task = get_object_or_404(Task, pk=pk)
+    if not _can_access_task(request.user, task):
+        return redirect('task_detail', pk=task.pk)
+    if request.method == 'POST':
+        form = TimeLogForm(request.POST)
+        if form.is_valid():
+            log = form.save(commit=False)
+            log.task = task
+            log.user = request.user
+            log.save()
+            # Tell managers when an engineer logs time.
+            if request.user.role == 'worker':
+                notify_managers(
+                    f'{request.user.username} logged {log.hours}h on "{task.title}".',
+                    reverse('task_detail', args=[task.pk]),
+                )
+            messages.success(request, f"Logged {log.hours}h.")
+        else:
+            messages.error(request, form.errors.get('hours', ['Please enter valid hours.'])[0])
+    return redirect('task_detail', pk=task.pk)
+
+
+@login_required
+def delete_timelog(request, pk):
+    log = get_object_or_404(TimeLog, pk=pk)
+    task = log.task
+    # The person who logged it, or a manager, may remove it — unless it's paid.
+    can = _is_manager(request.user) or log.user_id == request.user.id
+    if request.method == 'POST' and can:
+        if log.is_paid:
+            messages.error(request, "That time entry has been paid and can't be removed.")
+        else:
+            log.delete()
+            messages.success(request, "Time entry removed.")
+    return redirect('task_detail', pk=task.pk)
+
+
 @login_required
 def notifications_view(request):
     notes = request.user.notifications.all()
@@ -505,6 +561,27 @@ def run_payment(request, pk):
             )
             Task.objects.filter(pk__in=[t.pk for t in unpaid]).update(payment=payment)
             msg = f"Paid {engineer.username} KES {amount} for {len(unpaid)} task(s)."
+        elif engineer.pay_type == 'hourly':
+            # Pay every not-yet-paid time log at the engineer's hourly rate.
+            logs = list(
+                TimeLog.objects.select_for_update()
+                .filter(user=engineer, payment__isnull=True)
+            )
+            if not logs:
+                messages.error(request, f"{engineer.username} has no unpaid logged hours to pay.")
+                return redirect('engineer_detail', pk=engineer.pk)
+            rate = engineer.hourly_rate or Decimal('0')
+            if rate <= 0:
+                messages.error(request, f"Set an hourly rate for {engineer.username} first.")
+                return redirect('engineer_detail', pk=engineer.pk)
+            hours = sum((l.hours or Decimal('0')) for l in logs)
+            amount = hours * rate
+            payment = Payment.objects.create(
+                engineer=engineer, basis='hourly', period=period,
+                amount=amount, hours=hours, created_by=request.user,
+            )
+            TimeLog.objects.filter(pk__in=[l.pk for l in logs]).update(payment=payment)
+            msg = f"Paid {engineer.username} KES {amount} for {hours}h."
         else:
             amount = engineer.monthly_salary or Decimal('0')
             if amount <= 0:
@@ -542,7 +619,9 @@ def payment_detail(request, pk):
     if not _is_manager(request.user) and payment.engineer_id != request.user.id:
         return redirect('payments_list')
     tasks = payment.tasks.all().order_by('-completed_at')
-    return render(request, 'core/payment_detail.html', {'payment': payment, 'tasks': tasks})
+    time_logs = payment.time_logs.select_related('task').all()
+    return render(request, 'core/payment_detail.html',
+                  {'payment': payment, 'tasks': tasks, 'time_logs': time_logs})
 
 
 # ... existing code above unchanged ...
@@ -635,6 +714,7 @@ def _build_manager_report(request):
     engineers = User.objects.filter(role='worker').order_by('username')
     rows = []
     tot_earned = tot_paid = Decimal('0')
+    tot_est = tot_logged = Decimal('0')
     for e in engineers:
         et = tasks_qs.filter(assigned_to=e)
         total = et.count()
@@ -648,6 +728,9 @@ def _build_manager_report(request):
         # pending=0, in-progress = the engineer's reported estimate). This is a
         # truer "how far along" than the done/total count alone.
         avg_progress = et.aggregate(a=Avg('progress'))['a']
+        # Time: hours logged against this engineer's tasks vs the estimates.
+        est_hours = et.aggregate(s=Sum('estimated_hours'))['s'] or Decimal('0')
+        log_hours = TimeLog.objects.filter(task__in=et).aggregate(s=Sum('hours'))['s'] or Decimal('0')
         rows.append({
             'engineer': e,
             'pay_type': e.get_pay_type_display(),
@@ -659,12 +742,16 @@ def _build_manager_report(request):
             'overdue': overdue,
             'completion': round(100 * completed / total) if total else None,
             'avg_progress': round(avg_progress) if avg_progress is not None else None,
+            'estimated_hours': est_hours,
+            'logged_hours': log_hours,
             'earned': earned,
             'paid': paid,
             'unpaid': earned - paid,
         })
         tot_earned += earned
         tot_paid += paid
+        tot_est += est_hours
+        tot_logged += log_hours
 
     total_tasks = tasks_qs.count()
     total_completed = tasks_qs.filter(status='completed').count()
@@ -679,6 +766,8 @@ def _build_manager_report(request):
         'total_earned': tot_earned,
         'total_paid': tot_paid,
         'total_unpaid': tot_earned - tot_paid,
+        'total_estimated_hours': tot_est,
+        'total_logged_hours': tot_logged,
     }
 
 

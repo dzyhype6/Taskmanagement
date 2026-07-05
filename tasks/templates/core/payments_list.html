@@ -26,12 +26,14 @@
                     <td class="px-4 py-2 text-sm">
                         {% if p.basis == 'per_task' %}
                             <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-800">Per task</span>
+                        {% elif p.basis == 'hourly' %}
+                            <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-purple-100 text-purple-800">Hourly</span>
                         {% else %}
                             <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-800">Monthly</span>
                         {% endif %}
                     </td>
                     <td class="px-4 py-2 text-sm text-gray-700">{{ p.period|default:"—" }}</td>
-                    <td class="px-4 py-2 text-sm text-gray-700">{% if p.basis == 'per_task' %}{{ p.task_count }}{% else %}—{% endif %}</td>
+                    <td class="px-4 py-2 text-sm text-gray-700">{% if p.basis == 'per_task' %}{{ p.task_count }}{% elif p.basis == 'hourly' %}{{ p.hours }}h{% else %}—{% endif %}</td>
                     <td class="px-4 py-2 text-sm font-bold text-green-700">KES {{ p.amount }}</td>
                     <td class="px-4 py-2 text-sm text-gray-500">{{ p.created_at|date:"M d, Y" }}</td>
                     <td class="px-4 py-2 text-sm"><a href="{% url 'payment_detail' p.pk %}" class="text-blue-600 hover:underline">View</a></td>

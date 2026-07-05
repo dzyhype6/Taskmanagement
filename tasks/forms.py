@@ -1,6 +1,6 @@
 from django import forms
 from django.forms.widgets import DateInput
-from .models import Task, User, TaskComment, TaskAttachment
+from .models import Task, User, TaskComment, TaskAttachment, TimeLog
 
 class ReportFilterForm(forms.Form):
     start_date = forms.DateField(required=False, widget=DateInput(attrs={'type': 'date'}))
@@ -17,28 +17,60 @@ class TaskForm(forms.ModelForm):
         help_text="Pay for this task (per-task engineers). Leave blank to use the engineer's default task rate.",
     )
 
+    estimated_hours = forms.DecimalField(
+        required=False, min_value=0, initial=0, max_digits=7, decimal_places=2,
+        widget=forms.NumberInput(attrs={'step': '0.25', 'min': '0', 'placeholder': '0'}),
+        help_text="Estimated hours to complete (optional).",
+    )
+
     class Meta:
         model = Task
-        fields = ['title', 'description', 'assigned_to', 'status', 'priority', 'due_date', 'pay_amount']
+        fields = ['title', 'description', 'assigned_to', 'status', 'priority',
+                  'due_date', 'due_time', 'estimated_hours', 'pay_amount']
         widgets = {
             'due_date': forms.DateInput(attrs={'type': 'date'}),
+            'due_time': forms.TimeInput(attrs={'type': 'time'}),
         }
 
     def clean_pay_amount(self):
         # The model column is NOT NULL; coerce a blank entry to 0.
         return self.cleaned_data.get('pay_amount') or 0
 
+    def clean_estimated_hours(self):
+        return self.cleaned_data.get('estimated_hours') or 0
+
 
 class EngineerPayForm(forms.ModelForm):
     """Manager-only form to set how an engineer is paid."""
     class Meta:
         model = User
-        fields = ['pay_type', 'monthly_salary', 'task_rate']
+        fields = ['pay_type', 'monthly_salary', 'task_rate', 'hourly_rate']
         widgets = {
             'monthly_salary': forms.NumberInput(attrs={'step': '0.01', 'min': '0', 'class': 'border rounded px-3 py-2'}),
             'task_rate': forms.NumberInput(attrs={'step': '0.01', 'min': '0', 'class': 'border rounded px-3 py-2'}),
+            'hourly_rate': forms.NumberInput(attrs={'step': '0.01', 'min': '0', 'class': 'border rounded px-3 py-2'}),
             'pay_type': forms.Select(attrs={'class': 'border rounded px-3 py-2'}),
         }
+
+
+class TimeLogForm(forms.ModelForm):
+    """An engineer (or the PM) logs hours worked on a task."""
+    class Meta:
+        model = TimeLog
+        fields = ['hours', 'work_date', 'note']
+        widgets = {
+            'hours': forms.NumberInput(attrs={'step': '0.25', 'min': '0.25', 'placeholder': 'e.g. 2.5',
+                                              'class': 'border rounded px-3 py-2 w-full'}),
+            'work_date': forms.DateInput(attrs={'type': 'date', 'class': 'border rounded px-3 py-2 w-full'}),
+            'note': forms.TextInput(attrs={'placeholder': 'What did you work on? (optional)',
+                                           'class': 'border rounded px-3 py-2 w-full'}),
+        }
+
+    def clean_hours(self):
+        h = self.cleaned_data.get('hours')
+        if h is None or h <= 0:
+            raise forms.ValidationError("Enter a positive number of hours.")
+        return h
 
 
 class TaskCommentForm(forms.ModelForm):

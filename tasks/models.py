@@ -10,16 +10,22 @@ class User(AbstractUser):
     PAY_TYPE_CHOICES = (
         ('monthly', 'Monthly salary'),
         ('per_task', 'Paid per task'),
+        ('hourly', 'Paid per hour'),
     )
     # organization removed — single-organization app
     role = models.CharField(max_length=10, choices=ROLE_CHOICES)
-    # How an engineer is paid: a fixed monthly salary, or a rate for each
-    # approved task. Managers are 'monthly' by default and simply ignore this.
+    # How an engineer is paid: a fixed monthly salary, a rate for each approved
+    # task, or an hourly rate against logged time. Managers default to monthly
+    # and simply ignore this.
     pay_type = models.CharField(max_length=10, choices=PAY_TYPE_CHOICES, default='monthly')
     monthly_salary = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     task_rate = models.DecimalField(
         max_digits=10, decimal_places=2, default=0,
         help_text="Default pay for each approved task (used when a task has no explicit amount).",
+    )
+    hourly_rate = models.DecimalField(
+        max_digits=10, decimal_places=2, default=0,
+        help_text="Pay per hour of logged time (for per-hour engineers).",
     )
 
     def __str__(self):
@@ -48,7 +54,11 @@ class Task(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     due_date = models.DateField(null=True, blank=True)
+    due_time = models.TimeField(null=True, blank=True, help_text="Optional time of day the task is due.")
     completed_at = models.DateTimeField(null=True, blank=True)
+    # PM's estimate of how long the task should take (hours). Compared against
+    # the hours engineers actually log.
+    estimated_hours = models.DecimalField(max_digits=7, decimal_places=2, default=0)
 
     # --- Payment ---
     # What this task pays its engineer once the manager approves it (per-task
@@ -108,13 +118,29 @@ class Task(models.Model):
         return self.subtasks.exists()
 
     @property
+    def deadline(self):
+        """Aware datetime for the due date/time, or None. A missing time means
+        end of that day."""
+        if not self.due_date:
+            return None
+        from datetime import datetime, time as dtime
+        t = self.due_time or dtime(23, 59, 59)
+        dt = datetime.combine(self.due_date, t)
+        return timezone.make_aware(dt, timezone.get_current_timezone())
+
+    @property
     def is_overdue(self):
-        """Past its due date and not yet completed."""
-        return bool(
-            self.due_date
-            and self.status != 'completed'
-            and self.due_date < timezone.localdate()
-        )
+        """Past its deadline (date, and time if given) and not yet completed."""
+        if not self.due_date or self.status == 'completed':
+            return False
+        return self.deadline < timezone.now()
+
+    @property
+    def logged_hours(self):
+        """Total hours engineers have logged against this task."""
+        from decimal import Decimal
+        total = self.time_logs.aggregate(s=models.Sum('hours'))['s']
+        return total or Decimal('0')
 
     @property
     def is_paid(self):
@@ -137,6 +163,31 @@ class SubTask(models.Model):
 
     def __str__(self):
         return f"[{'x' if self.is_done else ' '}] {self.title}"
+
+
+class TimeLog(models.Model):
+    """Hours an engineer logged working on a task. For per-hour engineers these
+    feed payroll (hours × hourly rate); for everyone they track effort."""
+    task = models.ForeignKey(Task, on_delete=models.CASCADE, related_name='time_logs')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='time_logs')
+    hours = models.DecimalField(max_digits=6, decimal_places=2)
+    note = models.CharField(max_length=255, blank=True)
+    work_date = models.DateField(default=timezone.localdate)
+    created_at = models.DateTimeField(auto_now_add=True)
+    # Set once these hours have been paid on a payslip; locks the entry.
+    payment = models.ForeignKey(
+        'Payment', null=True, blank=True, on_delete=models.SET_NULL, related_name='time_logs',
+    )
+
+    class Meta:
+        ordering = ['-work_date', '-id']
+
+    @property
+    def is_paid(self):
+        return self.payment_id is not None
+
+    def __str__(self):
+        return f"{self.user.username}: {self.hours}h on #{self.task_id}"
 
 
 class Notification(models.Model):
@@ -192,16 +243,20 @@ class Payment(models.Model):
     - per_task: pays a batch of approved, not-yet-paid tasks (each task is
       linked back via Task.payment and locked from further edits/deletes).
     - monthly: pays the engineer's standing monthly salary; no tasks attached.
+    - hourly: pays a batch of not-yet-paid time logs (hours × hourly rate);
+      each TimeLog is linked back via TimeLog.payment and locked.
     """
     BASIS_CHOICES = (
         ('monthly', 'Monthly salary'),
         ('per_task', 'Per task'),
+        ('hourly', 'Per hour'),
     )
     engineer = models.ForeignKey(User, on_delete=models.CASCADE, related_name='payments')
     basis = models.CharField(max_length=10, choices=BASIS_CHOICES)
     period = models.CharField(max_length=40, blank=True, help_text="e.g. a month, sprint or free text.")
     amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     task_count = models.PositiveIntegerField(default=0)
+    hours = models.DecimalField(max_digits=8, decimal_places=2, default=0)  # for hourly payslips
     note = models.CharField(max_length=255, blank=True)
     created_by = models.ForeignKey(
         User, on_delete=models.SET_NULL, null=True, related_name='payments_made',

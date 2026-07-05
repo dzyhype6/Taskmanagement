@@ -20,6 +20,8 @@ from .views import (
     add_subtask,
     toggle_subtask,
     delete_subtask,
+    add_timelog,
+    delete_timelog,
     task_approve,
     engineer_pay_edit,
     run_payment,
@@ -61,6 +63,10 @@ urlpatterns = [
     path('tasks/<int:pk>/subtask/add/', add_subtask, name='add_subtask'),
     path('subtasks/<int:pk>/toggle/', toggle_subtask, name='toggle_subtask'),
     path('subtasks/<int:pk>/delete/', delete_subtask, name='delete_subtask'),
+
+    # Time logging
+    path('tasks/<int:pk>/time/add/', add_timelog, name='add_timelog'),
+    path('timelogs/<int:pk>/delete/', delete_timelog, name='delete_timelog'),
 
     # Notifications
     path('notifications/', notifications_view, name='notifications'),

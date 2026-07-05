@@ -17,6 +17,9 @@
                 {% if engineer.pay_type == 'per_task' %}
                     <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-800">Paid per task</span>
                     · Rate KES {{ engineer.task_rate }}
+                {% elif engineer.pay_type == 'hourly' %}
+                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-purple-100 text-purple-800">Paid per hour</span>
+                    · KES {{ engineer.hourly_rate }}/h
                 {% else %}
                     <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-800">Monthly salary</span>
                     · KES {{ engineer.monthly_salary }}
@@ -27,22 +30,31 @@
                 <div class="text-sm"><label class="block text-gray-700">Pay type</label>{{ pay_form.pay_type }}</div>
                 <div class="text-sm"><label class="block text-gray-700">Monthly salary (KES)</label>{{ pay_form.monthly_salary }}</div>
                 <div class="text-sm"><label class="block text-gray-700">Rate per task (KES)</label>{{ pay_form.task_rate }}</div>
+                <div class="text-sm"><label class="block text-gray-700">Rate per hour (KES)</label>{{ pay_form.hourly_rate }}</div>
                 <button type="submit" class="mt-2 bg-blue-800 text-white px-4 py-2 rounded text-sm hover:bg-blue-900 transition">Save pay settings</button>
             </form>
         </div>
         <div class="bg-white shadow rounded-lg p-6">
             <h2 class="text-lg font-bold text-blue-800 mb-3">Earnings</h2>
+            {% if engineer.pay_type == 'hourly' %}
+            <div class="grid grid-cols-3 gap-3 text-center mb-4">
+                <div class="bg-gray-50 rounded p-3"><div class="text-xl font-bold text-blue-800">{{ logged_hours }}h</div><div class="text-xs text-gray-500">Logged</div></div>
+                <div class="bg-gray-50 rounded p-3"><div class="text-xl font-bold text-orange-600">{{ unpaid_hours }}h</div><div class="text-xs text-gray-500">Unpaid hours</div></div>
+                <div class="bg-gray-50 rounded p-3"><div class="text-xl font-bold text-green-700">KES {{ hourly_unpaid }}</div><div class="text-xs text-gray-500">Due (unpaid)</div></div>
+            </div>
+            {% else %}
             <div class="grid grid-cols-3 gap-3 text-center mb-4">
                 <div class="bg-gray-50 rounded p-3"><div class="text-xl font-bold text-blue-800">KES {{ earned }}</div><div class="text-xs text-gray-500">Approved</div></div>
                 <div class="bg-gray-50 rounded p-3"><div class="text-xl font-bold text-green-700">KES {{ paid }}</div><div class="text-xs text-gray-500">Paid</div></div>
                 <div class="bg-gray-50 rounded p-3"><div class="text-xl font-bold text-orange-600">KES {{ unpaid }}</div><div class="text-xs text-gray-500">Unpaid</div></div>
             </div>
+            {% endif %}
             <form method="post" action="{% url 'run_payment' engineer.pk %}" class="flex items-end gap-2">
                 {% csrf_token %}
                 <div class="text-sm flex-1"><label class="block text-gray-700">Period (optional)</label>
                     <input type="text" name="period" placeholder="e.g. July 2026 / Sprint 5" class="border rounded px-3 py-2 w-full"></div>
                 <button type="submit" class="bg-green-600 text-white px-4 py-2 rounded text-sm hover:bg-green-700 transition whitespace-nowrap">
-                    {% if engineer.pay_type == 'per_task' %}Pay {{ payable_tasks }} approved task(s){% else %}Pay monthly salary{% endif %}
+                    {% if engineer.pay_type == 'per_task' %}Pay {{ payable_tasks }} approved task(s){% elif engineer.pay_type == 'hourly' %}Pay {{ unpaid_hours }}h{% else %}Pay monthly salary{% endif %}
                 </button>
             </form>
             {% if payments %}
