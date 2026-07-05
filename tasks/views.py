@@ -20,7 +20,7 @@ from django.db import transaction
 from django.db.models import Q, Sum, Avg
 from django.utils import timezone
 from decimal import Decimal
-from .models import Task, User, Notification, Payment
+from .models import Task, User, Notification, Payment, SubTask
 from .forms import (
     TaskForm, WorkerTaskStatusForm, ReportFilterForm,
     TaskCommentForm, TaskAttachmentForm, EngineerPayForm,
@@ -201,6 +201,9 @@ class TaskDetailView(LoginRequiredMixin, DetailView):
         ctx = super().get_context_data(**kwargs)
         ctx['comments'] = self.object.comments.select_related('author')
         ctx['attachments'] = self.object.attachments.select_related('uploaded_by')
+        ctx['subtasks'] = self.object.subtasks.all()
+        ctx['subtask_counts'] = self.object.subtask_counts
+        ctx['can_edit_subtasks'] = _can_access_task(self.request.user, self.object)
         ctx['comment_form'] = TaskCommentForm()
         ctx['attachment_form'] = TaskAttachmentForm()
         return ctx
@@ -315,6 +318,50 @@ def add_attachment(request, pk):
             messages.success(request, f'File "{att.filename}" attached.')
         else:
             messages.error(request, "Please choose a valid file to upload.")
+    return redirect('task_detail', pk=task.pk)
+
+
+# --- Subtasks / checklist (drives progress when present) ---
+
+@login_required
+def add_subtask(request, pk):
+    task = get_object_or_404(Task, pk=pk)
+    if not _can_access_task(request.user, task):
+        return redirect('task_detail', pk=task.pk)
+    if request.method == 'POST':
+        title = (request.POST.get('title') or '').strip()
+        if title:
+            SubTask.objects.create(task=task, title=title[:255])
+            task.save()  # recompute progress from the checklist
+            messages.success(request, "Checklist item added.")
+        else:
+            messages.error(request, "Enter a checklist item.")
+    return redirect('task_detail', pk=task.pk)
+
+
+@login_required
+def toggle_subtask(request, pk):
+    sub = get_object_or_404(SubTask, pk=pk)
+    task = sub.task
+    if not _can_access_task(request.user, task):
+        return redirect('task_detail', pk=task.pk)
+    if request.method == 'POST':
+        sub.is_done = not sub.is_done
+        sub.save(update_fields=['is_done'])
+        task.save()  # recompute progress from the checklist
+    return redirect('task_detail', pk=task.pk)
+
+
+@login_required
+def delete_subtask(request, pk):
+    sub = get_object_or_404(SubTask, pk=pk)
+    task = sub.task
+    # Only a manager or the assigned engineer may remove checklist items.
+    if not _can_access_task(request.user, task):
+        return redirect('task_detail', pk=task.pk)
+    if request.method == 'POST':
+        sub.delete()
+        task.save()  # recompute progress from the remaining checklist
     return redirect('task_detail', pk=task.pk)
 
 

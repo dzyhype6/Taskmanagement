@@ -213,6 +213,53 @@ class ProgressTrackingTests(TestCase):
         self.assertEqual(row['avg_progress'], 50)   # mean(100,50,0)
 
 
+class SubtaskTests(TestCase):
+    def setUp(self):
+        from tasks.models import SubTask
+        self.SubTask = SubTask
+        self.pm = User.objects.create_user(username='pm', password='pw', role='manager')
+        self.eng = User.objects.create_user(username='eng', password='pw', role='worker')
+        self.task = Task.objects.create(title='t', assigned_to=self.eng, status='in_progress')
+
+    def test_checklist_drives_progress(self):
+        self.client.login(username='pm', password='pw')
+        for name in ['a', 'b', 'c', 'd']:
+            self.client.post(reverse('add_subtask', args=[self.task.pk]), {'title': name})
+        self.task.refresh_from_db()
+        self.assertEqual(self.task.progress, 0)          # nothing ticked yet
+        subs = list(self.task.subtasks.all())
+        # tick two of four -> 50%
+        self.client.post(reverse('toggle_subtask', args=[subs[0].pk]))
+        self.client.post(reverse('toggle_subtask', args=[subs[1].pk]))
+        self.task.refresh_from_db()
+        self.assertEqual(self.task.progress, 50)
+
+    def test_all_ticked_caps_below_100_until_completed(self):
+        s1 = self.SubTask.objects.create(task=self.task, title='x', is_done=True)
+        s2 = self.SubTask.objects.create(task=self.task, title='y', is_done=True)
+        self.task.save()
+        self.task.refresh_from_db()
+        self.assertEqual(self.task.progress, 99)         # 100% checklist but still in progress
+        self.task.status = 'completed'; self.task.save()
+        self.assertEqual(self.task.progress, 100)
+
+    def test_checklist_overrides_self_report(self):
+        self.SubTask.objects.create(task=self.task, title='x', is_done=True)
+        self.SubTask.objects.create(task=self.task, title='y', is_done=False)
+        # worker tries to self-report 90%, but the checklist says 50%
+        self.client.login(username='eng', password='pw')
+        self.client.post(reverse('worker_task_update', args=[self.task.pk]),
+                         {'status': 'in_progress', 'progress': '90'})
+        self.task.refresh_from_db()
+        self.assertEqual(self.task.progress, 50)
+
+    def test_only_assignee_or_manager_edits_checklist(self):
+        other = User.objects.create_user(username='other', password='pw', role='worker')
+        self.client.login(username='other', password='pw')
+        self.client.post(reverse('add_subtask', args=[self.task.pk]), {'title': 'nope'})
+        self.assertEqual(self.task.subtasks.count(), 0)
+
+
 class WorkerPayVisibilityTests(TestCase):
     def test_completed_and_paid_shown_on_worker_dashboard(self):
         from tasks.models import Payment

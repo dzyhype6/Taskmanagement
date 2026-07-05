@@ -17,6 +17,9 @@ from .views import (
     notification_open,
     add_comment,
     add_attachment,
+    add_subtask,
+    toggle_subtask,
+    delete_subtask,
     task_approve,
     engineer_pay_edit,
     run_payment,
@@ -53,6 +56,11 @@ urlpatterns = [
     # Task collaboration: comments & file attachments
     path('tasks/<int:pk>/comment/', add_comment, name='add_comment'),
     path('tasks/<int:pk>/attach/', add_attachment, name='add_attachment'),
+
+    # Subtasks / checklist
+    path('tasks/<int:pk>/subtask/add/', add_subtask, name='add_subtask'),
+    path('subtasks/<int:pk>/toggle/', toggle_subtask, name='toggle_subtask'),
+    path('subtasks/<int:pk>/delete/', delete_subtask, name='delete_subtask'),
 
     # Notifications
     path('notifications/', notifications_view, name='notifications'),

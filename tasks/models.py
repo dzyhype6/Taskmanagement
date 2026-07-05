@@ -71,20 +71,41 @@ class Task(models.Model):
         elif self.status != 'completed':
             self.completed_at = None
         # Keep progress in step with status: a completed task is 100%, a task
-        # not yet started is 0%. While in progress the engineer's own value is
-        # kept (clamped to a sensible 0–100, and never a misleading 0 or 100).
+        # not yet started is 0%. While in progress, progress is driven by the
+        # checklist if one exists (objective), otherwise by the engineer's own
+        # self-reported estimate. Either way it is capped at 99 (100 = done).
         if self.status == 'completed':
             self.progress = 100
         elif self.status == 'pending':
             self.progress = 0
-        else:  # in_progress — keep the engineer's estimate, but 100% means "done"
-            self.progress = max(0, min(99, int(self.progress or 0)))
+        else:  # in_progress
+            from_checklist = self.subtask_progress if self.pk else None
+            value = from_checklist if from_checklist is not None else int(self.progress or 0)
+            self.progress = max(0, min(99, value))
         # Approval only makes sense for a completed task. If the task is moved
         # back out of completed, drop the approval too (unless already paid).
         if self.status != 'completed' and self.approved and self.payment_id is None:
             self.approved = False
             self.approved_at = None
         super().save(*args, **kwargs)
+
+    @property
+    def subtask_progress(self):
+        """% of checklist items done, or None if the task has no checklist."""
+        subs = list(self.subtasks.all())
+        if not subs:
+            return None
+        done = sum(1 for s in subs if s.is_done)
+        return round(100 * done / len(subs))
+
+    @property
+    def subtask_counts(self):
+        subs = list(self.subtasks.all())
+        return {'done': sum(1 for s in subs if s.is_done), 'total': len(subs)}
+
+    @property
+    def has_subtasks(self):
+        return self.subtasks.exists()
 
     @property
     def is_overdue(self):
@@ -101,6 +122,21 @@ class Task(models.Model):
 
     def __str__(self):
         return f"{self.title} - {self.status}"
+
+
+class SubTask(models.Model):
+    """A checklist item that breaks a task into smaller steps. When a task has
+    subtasks, its progress is the fraction of these that are done."""
+    task = models.ForeignKey(Task, on_delete=models.CASCADE, related_name='subtasks')
+    title = models.CharField(max_length=255)
+    is_done = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['id']  # keep the order they were added
+
+    def __str__(self):
+        return f"[{'x' if self.is_done else ' '}] {self.title}"
 
 
 class Notification(models.Model):
