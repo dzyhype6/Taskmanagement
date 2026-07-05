@@ -48,11 +48,30 @@
             {% endif %}
         </p>
 
-        <div class="mt-4 flex space-x-4">
+        <!-- Payment status -->
+        <p class="mb-2"><span class="font-semibold text-gray-700">Pay:</span>
+            {% if task.pay_amount %}KES {{ task.pay_amount }}{% else %}<span class="text-gray-500">—</span>{% endif %}
+            {% if task.approved %}
+                <span class="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">Approved for payment</span>
+            {% endif %}
+            {% if task.is_paid %}
+                <a href="{% url 'payment_detail' task.payment_id %}" class="ml-1 inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-gray-200 text-gray-700 hover:underline">Paid ✓</a>
+            {% endif %}
+        </p>
+
+        <div class="mt-4 flex flex-wrap gap-4">
             {% if user.is_authenticated %}
                 {% if user.is_superuser or user.role == 'manager' %}
-                    <a href="{% url 'task_update' task.pk %}" class="bg-yellow-600 text-white px-4 py-2 rounded hover:bg-yellow-700 transition">Edit</a>
-                    <a href="{% url 'task_delete' task.pk %}" class="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 transition">Delete</a>
+                    {% if task.status == 'completed' and not task.approved %}
+                        <form method="post" action="{% url 'task_approve' task.pk %}">
+                            {% csrf_token %}
+                            <button type="submit" class="bg-emerald-600 text-white px-4 py-2 rounded hover:bg-emerald-700 transition">✓ Approve for payment</button>
+                        </form>
+                    {% endif %}
+                    {% if not task.is_paid %}
+                        <a href="{% url 'task_update' task.pk %}" class="bg-yellow-600 text-white px-4 py-2 rounded hover:bg-yellow-700 transition">Edit</a>
+                        <a href="{% url 'task_delete' task.pk %}" class="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 transition">Delete</a>
+                    {% endif %}
                 {% elif user.role == 'worker' and task.assigned_to == user %}
                     <a href="{% url 'worker_task_update' task.pk %}" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition">Update Status</a>
                 {% endif %}

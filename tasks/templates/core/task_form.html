@@ -76,6 +76,15 @@
                 {% endif %}
             </div>
 
+            <div class="mb-6">
+                <label for="{{ form.pay_amount.id_for_label }}" class="block mb-2 text-sm font-medium text-gray-700">Pay for this task (KES)</label>
+                {{ form.pay_amount }}
+                <p class="text-xs text-gray-500 mt-1">{{ form.pay_amount.help_text }}</p>
+                {% if form.pay_amount.errors %}
+                    <p class="text-red-600 text-sm mt-1">{{ form.pay_amount.errors.0 }}</p>
+                {% endif %}
+            </div>
+
             <button type="submit" class="w-full bg-blue-800 text-white font-semibold py-2 px-4 rounded hover:bg-blue-900 transition">
                 {% if form.instance.pk %}Update{% else %}Create{% endif %} Task
             </button>

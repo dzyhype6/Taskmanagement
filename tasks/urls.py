@@ -17,6 +17,12 @@ from .views import (
     notification_open,
     add_comment,
     add_attachment,
+    task_approve,
+    engineer_pay_edit,
+    run_payment,
+    payments_list,
+    payment_detail,
+    manager_report,
 )
 
 urlpatterns = [
@@ -51,4 +57,14 @@ urlpatterns = [
 
     # Reports (HTML view and PDF export via ?format=pdf)
     path('reports/', reports_view, name='reports'),
+
+    # Payment: approve a completed task, set engineer pay, run payslips
+    path('tasks/<int:pk>/approve/', task_approve, name='task_approve'),
+    path('engineers/<int:pk>/pay-settings/', engineer_pay_edit, name='engineer_pay_edit'),
+    path('engineers/<int:pk>/pay/', run_payment, name='run_payment'),
+    path('payments/', payments_list, name='payments_list'),
+    path('payments/<int:pk>/', payment_detail, name='payment_detail'),
+
+    # On-demand PM progress + payment report (HTML, and PDF via ?format=pdf)
+    path('pm-report/', manager_report, name='manager_report'),
 ]

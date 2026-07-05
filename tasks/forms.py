@@ -10,11 +10,34 @@ class ReportFilterForm(forms.Form):
 
 
 class TaskForm(forms.ModelForm):
+    # Optional in the UI: left blank/0 it falls back to the engineer's task rate.
+    pay_amount = forms.DecimalField(
+        required=False, min_value=0, initial=0, max_digits=10, decimal_places=2,
+        widget=forms.NumberInput(attrs={'step': '0.01', 'min': '0', 'placeholder': '0'}),
+        help_text="Pay for this task (per-task engineers). Leave blank to use the engineer's default task rate.",
+    )
+
     class Meta:
         model = Task
-        fields = ['title', 'description', 'assigned_to', 'status', 'priority', 'due_date']
+        fields = ['title', 'description', 'assigned_to', 'status', 'priority', 'due_date', 'pay_amount']
         widgets = {
             'due_date': forms.DateInput(attrs={'type': 'date'}),
+        }
+
+    def clean_pay_amount(self):
+        # The model column is NOT NULL; coerce a blank entry to 0.
+        return self.cleaned_data.get('pay_amount') or 0
+
+
+class EngineerPayForm(forms.ModelForm):
+    """Manager-only form to set how an engineer is paid."""
+    class Meta:
+        model = User
+        fields = ['pay_type', 'monthly_salary', 'task_rate']
+        widgets = {
+            'monthly_salary': forms.NumberInput(attrs={'step': '0.01', 'min': '0', 'class': 'border rounded px-3 py-2'}),
+            'task_rate': forms.NumberInput(attrs={'step': '0.01', 'min': '0', 'class': 'border rounded px-3 py-2'}),
+            'pay_type': forms.Select(attrs={'class': 'border rounded px-3 py-2'}),
         }
 
 

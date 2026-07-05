@@ -68,6 +68,8 @@
                     <a href="{% url 'engineer_list' %}" class="text-blue-800 hover:underline">Engineers</a>
                     <a href="{% url 'register' %}" class="text-blue-800 hover:underline">Create New User</a>
                     <a href="{% url 'reports' %}" class="text-blue-800 hover:underline">Reports</a>
+                    <a href="{% url 'manager_report' %}" class="text-blue-800 hover:underline">PM Report</a>
+                    <a href="{% url 'payments_list' %}" class="text-blue-800 hover:underline">Payments</a>
                 {% elif user.role == 'manager' %}
                     <a href="{% url 'manager_dashboard' %}" class="text-blue-800 hover:underline">PM Dashboard</a>
                     <a href="{% url 'task_list' %}" class="text-blue-800 hover:underline">All Tasks</a>
@@ -75,10 +77,13 @@
                     <a href="{% url 'engineer_list' %}" class="text-blue-800 hover:underline">Engineers</a>
                     <a href="{% url 'register' %}" class="text-blue-800 hover:underline">Create New User</a>
                     <a href="{% url 'reports' %}" class="text-blue-800 hover:underline">Reports</a>
+                    <a href="{% url 'manager_report' %}" class="text-blue-800 hover:underline">PM Report</a>
+                    <a href="{% url 'payments_list' %}" class="text-blue-800 hover:underline">Payments</a>
                 {% elif user.role == 'worker' %}
                     <a href="{% url 'worker_dashboard' %}" class="text-blue-800 hover:underline">Engineer Dashboard</a>
                     <a href="{% url 'task_list' %}" class="text-blue-800 hover:underline">My Tasks</a>
                     <a href="{% url 'reports' %}" class="text-blue-800 hover:underline">My Reports</a>
+                    <a href="{% url 'payments_list' %}" class="text-blue-800 hover:underline">My Payments</a>
                 {% else %}
                     <a href="{% url 'task_list' %}" class="text-blue-800 hover:underline">Tasks</a>
                     <a href="{% url 'reports' %}" class="text-blue-800 hover:underline">Reports</a>

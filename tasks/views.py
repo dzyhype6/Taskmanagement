@@ -16,14 +16,30 @@ except Exception:  # pragma: no cover
 
 
 from django.urls import reverse
-from django.db.models import Q
-from .models import Task, User, Notification
+from django.db import transaction
+from django.db.models import Q, Sum
+from django.utils import timezone
+from decimal import Decimal
+from .models import Task, User, Notification, Payment
 from .forms import (
     TaskForm, WorkerTaskStatusForm, ReportFilterForm,
-    TaskCommentForm, TaskAttachmentForm,
+    TaskCommentForm, TaskAttachmentForm, EngineerPayForm,
 )
 from .services import notify, notify_managers
 from django.contrib import messages
+
+
+def _is_manager(user):
+    return user.is_superuser or user.role == 'manager'
+
+
+def _default_task_pay(task):
+    """For a per-task engineer, fall back to their standing rate when a task
+    was created without an explicit amount. Never lowers an amount already set."""
+    eng = task.assigned_to
+    if eng and eng.pay_type == 'per_task' and (task.pay_amount or 0) == 0:
+        return eng.task_rate or Decimal('0')
+    return task.pay_amount or Decimal('0')
 
 
 # --- Role redirect and not member view ---
@@ -70,7 +86,21 @@ def engineer_detail(request, pk):
         return redirect('worker_dashboard')
     engineer = get_object_or_404(User, pk=pk, role='worker')
     tasks = Task.objects.filter(assigned_to=engineer).order_by('-created_at')
-    return render(request, 'core/engineer_detail.html', {'engineer': engineer, 'tasks': tasks})
+    # Payment snapshot for the header cards.
+    approved_qs = tasks.filter(approved=True)
+    earned = approved_qs.aggregate(s=Sum('pay_amount'))['s'] or Decimal('0')
+    paid = approved_qs.filter(payment__isnull=False).aggregate(s=Sum('pay_amount'))['s'] or Decimal('0')
+    payable_tasks = approved_qs.filter(payment__isnull=True).count()
+    return render(request, 'core/engineer_detail.html', {
+        'engineer': engineer,
+        'tasks': tasks,
+        'pay_form': EngineerPayForm(instance=engineer),
+        'earned': earned,
+        'paid': paid,
+        'unpaid': earned - paid,
+        'payable_tasks': payable_tasks,
+        'payments': engineer.payments.all()[:10],
+    })
 
 @login_required
 def worker_dashboard(request):
@@ -178,6 +208,12 @@ class TaskCreateView(LoginRequiredMixin, ManagerRequiredMixin, CreateView):
         response = super().form_valid(form)
         # Notify (and email) the engineer the task was assigned to.
         task = self.object
+        # Fill in the per-task pay from the engineer's standing rate if the
+        # manager left the amount at 0.
+        default_pay = _default_task_pay(task)
+        if default_pay != (task.pay_amount or 0):
+            task.pay_amount = default_pay
+            task.save(update_fields=['pay_amount'])
         link = reverse('task_detail', args=[task.pk])
         notify(
             task.assigned_to,
@@ -198,16 +234,30 @@ class TaskUpdateView(LoginRequiredMixin, ManagerRequiredMixin, UpdateView):
         old_assignee_id = Task.objects.get(pk=self.object.pk).assigned_to_id if self.object else None
         response = super().form_valid(form)
         task = self.object
+        # Keep the per-task default in step if the amount was left at 0.
+        default_pay = _default_task_pay(task)
+        if default_pay != (task.pay_amount or 0):
+            task.pay_amount = default_pay
+            task.save(update_fields=['pay_amount'])
         if task.assigned_to_id != old_assignee_id:
             link = reverse('task_detail', args=[task.pk])
             notify(task.assigned_to, f'A task was assigned to you: "{task.title}"', link)
         messages.success(self.request, "Task updated successfully.")
         return response
 
+    def get_queryset(self):
+        # A task locked to a payslip must not be edited (amount/assignee changes
+        # would corrupt what was already paid).
+        return Task.objects.filter(payment__isnull=True)
+
 class TaskDeleteView(LoginRequiredMixin, ManagerRequiredMixin, DeleteView):
     model = Task
     template_name = 'core/task_confirm_delete.html'
     success_url = reverse_lazy('task_list')
+
+    def get_queryset(self):
+        # A paid task is part of a payslip and cannot be deleted.
+        return Task.objects.filter(payment__isnull=True)
 
     def delete(self, request, *args, **kwargs):
         messages.success(self.request, "Task deleted successfully.")
@@ -306,6 +356,118 @@ def worker_task_update(request, pk):
     return render(request, 'core/worker_task_update.html', {'form': form, 'task': task})
 
 
+# --- Payment: approval, engineer pay profile, and running payslips ---
+
+@login_required
+def task_approve(request, pk):
+    """Manager approves a *completed* task so it counts for payment."""
+    if not _is_manager(request.user):
+        return redirect('worker_dashboard')
+    task = get_object_or_404(Task, pk=pk)
+    if request.method != 'POST':
+        return redirect('task_detail', pk=task.pk)
+    if task.status != 'completed':
+        messages.error(request, "Only a completed task can be approved for payment.")
+    elif task.approved:
+        messages.info(request, "That task is already approved.")
+    else:
+        task.approved = True
+        task.approved_at = timezone.now()
+        task.save(update_fields=['approved', 'approved_at'])
+        link = reverse('task_detail', args=[task.pk])
+        notify(task.assigned_to, f'Your task "{task.title}" was approved for payment.', link)
+        messages.success(request, f'"{task.title}" approved for payment.')
+    return redirect(request.POST.get('next') or reverse('task_detail', args=[task.pk]))
+
+
+@login_required
+def engineer_pay_edit(request, pk):
+    """Manager sets how an engineer is paid (monthly salary or per-task rate)."""
+    if not _is_manager(request.user):
+        return redirect('worker_dashboard')
+    engineer = get_object_or_404(User, pk=pk, role='worker')
+    if request.method == 'POST':
+        form = EngineerPayForm(request.POST, instance=engineer)
+        if form.is_valid():
+            form.save()
+            messages.success(request, f"Pay settings updated for {engineer.username}.")
+            return redirect('engineer_detail', pk=engineer.pk)
+        messages.error(request, "Please correct the errors below.")
+    else:
+        form = EngineerPayForm(instance=engineer)
+    return render(request, 'core/engineer_pay_edit.html', {'form': form, 'engineer': engineer})
+
+
+@login_required
+def run_payment(request, pk):
+    """Record a payment for an engineer.
+
+    per-task engineer: pays every approved, not-yet-paid task (locks them).
+    monthly engineer:  records a payment of their monthly salary.
+    """
+    if not _is_manager(request.user):
+        return redirect('worker_dashboard')
+    engineer = get_object_or_404(User, pk=pk, role='worker')
+    if request.method != 'POST':
+        return redirect('engineer_detail', pk=engineer.pk)
+    period = (request.POST.get('period') or '').strip()
+
+    with transaction.atomic():
+        if engineer.pay_type == 'per_task':
+            # Lock the rows we're about to pay so two managers can't double-pay.
+            unpaid = list(
+                Task.objects.select_for_update()
+                .filter(assigned_to=engineer, approved=True, payment__isnull=True)
+            )
+            if not unpaid:
+                messages.error(request, f"{engineer.username} has no approved, unpaid tasks to pay.")
+                return redirect('engineer_detail', pk=engineer.pk)
+            amount = sum((t.pay_amount or Decimal('0')) for t in unpaid)
+            payment = Payment.objects.create(
+                engineer=engineer, basis='per_task', period=period,
+                amount=amount, task_count=len(unpaid), created_by=request.user,
+            )
+            Task.objects.filter(pk__in=[t.pk for t in unpaid]).update(payment=payment)
+            msg = f"Paid {engineer.username} KES {amount} for {len(unpaid)} task(s)."
+        else:
+            amount = engineer.monthly_salary or Decimal('0')
+            if amount <= 0:
+                messages.error(request, f"Set a monthly salary for {engineer.username} first.")
+                return redirect('engineer_detail', pk=engineer.pk)
+            payment = Payment.objects.create(
+                engineer=engineer, basis='monthly', period=period,
+                amount=amount, task_count=0, created_by=request.user,
+            )
+            msg = f"Recorded monthly salary of KES {amount} for {engineer.username}."
+
+    link = reverse('payment_detail', args=[payment.pk])
+    notify(engineer, f'A payment of KES {payment.amount} was recorded for you.', link)
+    messages.success(request, msg)
+    return redirect('payment_detail', pk=payment.pk)
+
+
+@login_required
+def payments_list(request):
+    """Manager: all payments. Engineer: only their own payslips."""
+    if _is_manager(request.user):
+        payments = Payment.objects.select_related('engineer', 'created_by').all()
+    else:
+        payments = Payment.objects.select_related('created_by').filter(engineer=request.user)
+    total = payments.aggregate(s=Sum('amount'))['s'] or Decimal('0')
+    return render(request, 'core/payments_list.html', {
+        'payments': payments, 'total': total, 'is_manager': _is_manager(request.user),
+    })
+
+
+@login_required
+def payment_detail(request, pk):
+    """A single payslip. Engineers may only open their own."""
+    payment = get_object_or_404(Payment.objects.select_related('engineer', 'created_by'), pk=pk)
+    if not _is_manager(request.user) and payment.engineer_id != request.user.id:
+        return redirect('payments_list')
+    tasks = payment.tasks.all().order_by('-completed_at')
+    return render(request, 'core/payment_detail.html', {'payment': payment, 'tasks': tasks})
+
 
 # ... existing code above unchanged ...
 
@@ -377,3 +539,96 @@ def reports_view(request):
 
     # Otherwise show HTML report page with link to download
     return render(request, 'core/reports.html', context)
+
+
+def _build_manager_report(request):
+    """Assemble the on-demand progress + payment report for the PM.
+
+    Computed live from current task/payment state each time it is requested —
+    there is no schedule. Optional date window filters on task creation date.
+    """
+    start = (request.GET.get('start') or '').strip()
+    end = (request.GET.get('end') or '').strip()
+
+    tasks_qs = Task.objects.all()
+    if start:
+        tasks_qs = tasks_qs.filter(created_at__date__gte=start)
+    if end:
+        tasks_qs = tasks_qs.filter(created_at__date__lte=end)
+
+    engineers = User.objects.filter(role='worker').order_by('username')
+    rows = []
+    tot_earned = tot_paid = Decimal('0')
+    for e in engineers:
+        et = tasks_qs.filter(assigned_to=e)
+        total = et.count()
+        completed = et.filter(status='completed').count()
+        approved = et.filter(approved=True).count()
+        # earned = approved tasks' pay; paid = approved tasks already on a payslip
+        earned = et.filter(approved=True).aggregate(s=Sum('pay_amount'))['s'] or Decimal('0')
+        paid = et.filter(approved=True, payment__isnull=False).aggregate(s=Sum('pay_amount'))['s'] or Decimal('0')
+        overdue = sum(1 for t in et if t.is_overdue)
+        rows.append({
+            'engineer': e,
+            'pay_type': e.get_pay_type_display(),
+            'total': total,
+            'pending': et.filter(status='pending').count(),
+            'in_progress': et.filter(status='in_progress').count(),
+            'completed': completed,
+            'approved': approved,
+            'overdue': overdue,
+            'completion': round(100 * completed / total) if total else None,
+            'earned': earned,
+            'paid': paid,
+            'unpaid': earned - paid,
+        })
+        tot_earned += earned
+        tot_paid += paid
+
+    total_tasks = tasks_qs.count()
+    total_completed = tasks_qs.filter(status='completed').count()
+    return {
+        'generated_at': timezone.now(),
+        'start': start,
+        'end': end,
+        'rows': rows,
+        'total_tasks': total_tasks,
+        'total_completed': total_completed,
+        'total_completion': round(100 * total_completed / total_tasks) if total_tasks else None,
+        'total_earned': tot_earned,
+        'total_paid': tot_paid,
+        'total_unpaid': tot_earned - tot_paid,
+    }
+
+
+@login_required
+def manager_report(request):
+    """On-demand PM report: per-engineer task progress + payment.
+
+    Generated the moment the manager asks for it (a page load / PDF button),
+    NOT on a timer. `?format=pdf` streams a PDF built with xhtml2pdf, which
+    works on Windows without native libraries.
+    """
+    if not _is_manager(request.user):
+        return redirect('worker_dashboard')
+    context = _build_manager_report(request)
+
+    if request.GET.get('format') == 'pdf':
+        try:
+            from xhtml2pdf import pisa
+            from io import BytesIO
+        except Exception:
+            messages.error(request, "PDF support (xhtml2pdf) is not installed on the server.")
+            return redirect('manager_report')
+        html = render_to_string('core/manager_report_pdf.html', context, request=request)
+        buf = BytesIO()
+        result = pisa.CreatePDF(src=html, dest=buf, encoding='utf-8')
+        if result.err:
+            messages.error(request, "Could not generate the PDF report.")
+            return redirect('manager_report')
+        filename = f"codeforge-progress-{date.today().isoformat()}.pdf"
+        response = HttpResponse(buf.getvalue(), content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
+
+    return render(request, 'core/manager_report.html', context)

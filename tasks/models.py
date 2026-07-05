@@ -7,8 +7,20 @@ class User(AbstractUser):
         ('manager', 'Project Manager'),
         ('worker', 'Engineer'),
     )
+    PAY_TYPE_CHOICES = (
+        ('monthly', 'Monthly salary'),
+        ('per_task', 'Paid per task'),
+    )
     # organization removed — single-organization app
     role = models.CharField(max_length=10, choices=ROLE_CHOICES)
+    # How an engineer is paid: a fixed monthly salary, or a rate for each
+    # approved task. Managers are 'monthly' by default and simply ignore this.
+    pay_type = models.CharField(max_length=10, choices=PAY_TYPE_CHOICES, default='monthly')
+    monthly_salary = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    task_rate = models.DecimalField(
+        max_digits=10, decimal_places=2, default=0,
+        help_text="Default pay for each approved task (used when a task has no explicit amount).",
+    )
 
     def __str__(self):
         return f"{self.username} ({self.get_role_display()})"
@@ -35,6 +47,18 @@ class Task(models.Model):
     due_date = models.DateField(null=True, blank=True)
     completed_at = models.DateTimeField(null=True, blank=True)
 
+    # --- Payment ---
+    # What this task pays its engineer once the manager approves it (per-task
+    # engineers). For monthly engineers it is simply informational.
+    pay_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    # A completed task must be approved by a manager before it counts for pay.
+    approved = models.BooleanField(default=False)
+    approved_at = models.DateTimeField(null=True, blank=True)
+    # Set once the task has been included in a payment (payslip); locks it.
+    payment = models.ForeignKey(
+        'Payment', null=True, blank=True, on_delete=models.SET_NULL, related_name='tasks',
+    )
+
     def save(self, *args, **kwargs):
         # Stamp the moment the task first reaches 'completed'; clear it if the
         # task is moved back out of completed. Keeps an accurate finish time
@@ -43,7 +67,25 @@ class Task(models.Model):
             self.completed_at = timezone.now()
         elif self.status != 'completed':
             self.completed_at = None
+        # Approval only makes sense for a completed task. If the task is moved
+        # back out of completed, drop the approval too (unless already paid).
+        if self.status != 'completed' and self.approved and self.payment_id is None:
+            self.approved = False
+            self.approved_at = None
         super().save(*args, **kwargs)
+
+    @property
+    def is_overdue(self):
+        """Past its due date and not yet completed."""
+        return bool(
+            self.due_date
+            and self.status != 'completed'
+            and self.due_date < timezone.localdate()
+        )
+
+    @property
+    def is_paid(self):
+        return self.payment_id is not None
 
     def __str__(self):
         return f"{self.title} - {self.status}"
@@ -94,3 +136,32 @@ class TaskAttachment(models.Model):
 
     def __str__(self):
         return f"{self.filename} on #{self.task_id}"
+
+
+class Payment(models.Model):
+    """A payment (payslip) a manager records for an engineer.
+
+    - per_task: pays a batch of approved, not-yet-paid tasks (each task is
+      linked back via Task.payment and locked from further edits/deletes).
+    - monthly: pays the engineer's standing monthly salary; no tasks attached.
+    """
+    BASIS_CHOICES = (
+        ('monthly', 'Monthly salary'),
+        ('per_task', 'Per task'),
+    )
+    engineer = models.ForeignKey(User, on_delete=models.CASCADE, related_name='payments')
+    basis = models.CharField(max_length=10, choices=BASIS_CHOICES)
+    period = models.CharField(max_length=40, blank=True, help_text="e.g. a month, sprint or free text.")
+    amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    task_count = models.PositiveIntegerField(default=0)
+    note = models.CharField(max_length=255, blank=True)
+    created_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, related_name='payments_made',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.engineer.username} — {self.amount} ({self.get_basis_display()})"
