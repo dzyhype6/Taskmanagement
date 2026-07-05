@@ -22,6 +22,25 @@
             {% endif %}
         </p>
 
+        <!-- Progress toward completion -->
+        <div class="mb-3">
+            <div class="flex items-center justify-between mb-1">
+                <span class="font-semibold text-gray-700 text-sm">Progress</span>
+                <span class="text-sm font-bold {% if task.progress == 100 %}text-green-700{% else %}text-blue-800{% endif %}">{{ task.progress }}%</span>
+            </div>
+            <div class="w-full bg-gray-200 rounded-full h-3">
+                <div class="h-3 rounded-full {% if task.progress == 100 %}bg-green-600{% else %}bg-blue-600{% endif %}" style="width: {{ task.progress }}%"></div>
+            </div>
+            {% if user.is_superuser or user.role == 'manager' %}
+                {% if task.status != 'completed' %}
+                <form method="post" action="{% url 'request_progress' task.pk %}" class="mt-2 no-print">
+                    {% csrf_token %}
+                    <button type="submit" class="text-xs bg-blue-100 text-blue-800 px-3 py-1 rounded hover:bg-blue-200 transition">📩 Ask engineer how close they are</button>
+                </form>
+                {% endif %}
+            {% endif %}
+        </div>
+
         <p class="mb-2"><span class="font-semibold text-gray-700">Priority:</span>
             {% if task.priority == 'high' %}
                 <span class="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-800">High</span>

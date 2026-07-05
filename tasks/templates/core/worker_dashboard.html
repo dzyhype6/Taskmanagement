@@ -29,6 +29,7 @@
                     <tr>
                         <th class="px-4 py-3 text-left text-xs font-medium text-blue-800 uppercase">Title</th>
                         <th class="px-4 py-3 text-left text-xs font-medium text-blue-800 uppercase">Status</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-blue-800 uppercase">Progress</th>
                         <th class="px-4 py-3 text-left text-xs font-medium text-blue-800 uppercase">Due Date</th>
                         <th class="px-4 py-3 text-left text-xs font-medium text-blue-800 uppercase">Actions</th>
                     </tr>
@@ -52,6 +53,14 @@
                             {% else %}
                                 <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-800">{{ task.status }}</span>
                             {% endif %}
+                        </td>
+                        <td class="px-4 py-3 align-middle">
+                            <div class="flex items-center gap-2">
+                                <div class="w-24 bg-gray-200 rounded-full h-2">
+                                    <div class="h-2 rounded-full {% if task.progress == 100 %}bg-green-600{% else %}bg-blue-600{% endif %}" style="width: {{ task.progress }}%"></div>
+                                </div>
+                                <span class="text-xs text-gray-600">{{ task.progress }}%</span>
+                            </div>
                         </td>
                         <td class="px-4 py-3 align-middle text-sm text-gray-700">
                             {% if task.due_date %}
@@ -78,7 +87,7 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="4" class="px-4 py-6 text-center text-gray-500">
+                        <td colspan="5" class="px-4 py-6 text-center text-gray-500">
                             You have no assigned tasks.
                         </td>
                     </tr>
@@ -102,6 +111,54 @@
             </div>
         </div>
         {% endif %}
+    </div>
+
+    <!-- Completed work & pay -->
+    <div class="bg-white shadow rounded-lg overflow-hidden mt-8">
+        <div class="p-4 border-b flex items-center justify-between">
+            <div>
+                <h2 class="text-lg font-semibold text-gray-700">Completed work &amp; pay</h2>
+                <p class="text-sm text-gray-500">Your finished tasks and what you were paid ({{ pay_type }}).</p>
+            </div>
+            <div class="text-right">
+                <div class="text-xl font-bold text-green-700">KES {{ total_paid }}</div>
+                <div class="text-xs text-gray-500">Total paid to you</div>
+            </div>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-green-50">
+                    <tr>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-green-800 uppercase">Task</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-green-800 uppercase">Completed</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-green-800 uppercase">Pay</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-green-800 uppercase">Payment status</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    {% for task in completed_tasks %}
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-4 py-3 text-sm font-medium text-gray-900">
+                            <a href="{% url 'task_detail' task.pk %}" class="hover:underline">{{ task.title }}</a>
+                        </td>
+                        <td class="px-4 py-3 text-sm text-gray-600">{{ task.completed_at|date:"M d, Y"|default:"—" }}</td>
+                        <td class="px-4 py-3 text-sm text-gray-700">{% if task.pay_amount %}KES {{ task.pay_amount }}{% else %}—{% endif %}</td>
+                        <td class="px-4 py-3 text-sm">
+                            {% if task.is_paid %}
+                                <a href="{% url 'payment_detail' task.payment_id %}" class="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-800 hover:underline">Paid ✓ · view payslip</a>
+                            {% elif task.approved %}
+                                <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700">Approved — awaiting payment</span>
+                            {% else %}
+                                <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-600">Awaiting approval</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="4" class="px-4 py-6 text-center text-gray-500">No completed tasks yet.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
     </div>
 </div>
 {% endblock %}

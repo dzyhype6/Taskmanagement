@@ -67,9 +67,22 @@ class WorkerTaskStatusForm(forms.ModelForm):
         'completed': set(),
     }
 
+    # How close to finishing (0–100). Rendered as a slider on the update page.
+    progress = forms.IntegerField(
+        required=False, min_value=0, max_value=100, initial=0,
+        widget=forms.NumberInput(attrs={
+            'type': 'range', 'min': '0', 'max': '100', 'step': '5',
+            'class': 'w-full', 'oninput': "document.getElementById('progressVal').textContent=this.value+'%'",
+        }),
+        help_text="Only used while a task is In Progress. Completed = 100%.",
+    )
+
     class Meta:
         model = Task
-        fields = ['status']
+        fields = ['status', 'progress']
+
+    def clean_progress(self):
+        return self.cleaned_data.get('progress') or 0
 
     def clean_status(self):
         new_status = self.cleaned_data['status']

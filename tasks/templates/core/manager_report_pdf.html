@@ -39,8 +39,8 @@
     <thead>
       <tr>
         <th>Engineer</th><th>Pay</th><th>Tasks</th><th>In Progress</th>
-        <th>Completed</th><th>Approved</th><th>Overdue</th><th>Completion</th>
-        <th>Earned</th><th>Unpaid</th>
+        <th>Completed</th><th>Approved</th><th>Overdue</th><th>Completed %</th>
+        <th>Overall progress</th><th>Earned</th><th>Unpaid</th>
       </tr>
     </thead>
     <tbody>
@@ -54,11 +54,12 @@
         <td>{{ r.approved }}</td>
         <td {% if r.overdue %}class="overdue"{% endif %}>{{ r.overdue }}</td>
         <td>{% if r.completion is not None %}{{ r.completion }}%{% else %}—{% endif %}</td>
+        <td>{% if r.avg_progress is not None %}{{ r.avg_progress }}%{% else %}—{% endif %}</td>
         <td>KES {{ r.earned }}</td>
         <td>KES {{ r.unpaid }}</td>
       </tr>
       {% empty %}
-      <tr><td colspan="10" class="muted">No engineers found.</td></tr>
+      <tr><td colspan="11" class="muted">No engineers found.</td></tr>
       {% endfor %}
     </tbody>
   </table>

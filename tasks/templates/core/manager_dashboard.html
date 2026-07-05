@@ -31,6 +31,12 @@
                             <span class="capitalize">{{ task.get_status_display }}</span>
                             {% if task.approved %}<span class="ml-1 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">Approved</span>{% endif %}
                             {% if task.is_paid %}<span class="ml-1 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-200 text-gray-700">Paid</span>{% endif %}
+                            {% if task.status == 'in_progress' %}
+                            <div class="flex items-center gap-2 mt-1">
+                                <div class="w-20 bg-gray-200 rounded-full h-1.5"><div class="h-1.5 rounded-full bg-blue-600" style="width: {{ task.progress }}%"></div></div>
+                                <span class="text-xs text-gray-500">{{ task.progress }}%</span>
+                            </div>
+                            {% endif %}
                         </td>
                         <td class="px-4 py-2">{% if task.pay_amount %}KES {{ task.pay_amount }}{% else %}—{% endif %}</td>
                         <td class="px-4 py-2">{{ task.due_date|default:"—" }}</td>

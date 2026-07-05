@@ -6,4 +6,6 @@ TaskManagement/email_config.py
 .venv/
 dev.log
 shot_*.png
-uitest.mjs
+w_*.png
+m_*.png
+uitest*.mjs

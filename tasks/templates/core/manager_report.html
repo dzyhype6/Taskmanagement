@@ -42,7 +42,8 @@
                     <th class="px-3 py-2 text-left text-xs font-medium text-blue-800 uppercase">Completed</th>
                     <th class="px-3 py-2 text-left text-xs font-medium text-blue-800 uppercase">Approved</th>
                     <th class="px-3 py-2 text-left text-xs font-medium text-blue-800 uppercase">Overdue</th>
-                    <th class="px-3 py-2 text-left text-xs font-medium text-blue-800 uppercase">Completion</th>
+                    <th class="px-3 py-2 text-left text-xs font-medium text-blue-800 uppercase">Completed %</th>
+                    <th class="px-3 py-2 text-left text-xs font-medium text-blue-800 uppercase">Overall progress</th>
                     <th class="px-3 py-2 text-left text-xs font-medium text-blue-800 uppercase">Earned</th>
                     <th class="px-3 py-2 text-left text-xs font-medium text-blue-800 uppercase">Unpaid</th>
                 </tr>
@@ -58,11 +59,19 @@
                     <td class="px-3 py-2">{{ r.approved }}</td>
                     <td class="px-3 py-2">{% if r.overdue %}<span class="text-red-600 font-semibold">{{ r.overdue }}</span>{% else %}0{% endif %}</td>
                     <td class="px-3 py-2">{% if r.completion is not None %}{{ r.completion }}%{% else %}—{% endif %}</td>
+                    <td class="px-3 py-2">
+                        {% if r.avg_progress is not None %}
+                        <div class="flex items-center gap-2">
+                            <div class="w-16 bg-gray-200 rounded-full h-2"><div class="h-2 rounded-full bg-blue-600" style="width: {{ r.avg_progress }}%"></div></div>
+                            <span class="text-xs">{{ r.avg_progress }}%</span>
+                        </div>
+                        {% else %}—{% endif %}
+                    </td>
                     <td class="px-3 py-2">KES {{ r.earned }}</td>
                     <td class="px-3 py-2">{% if r.unpaid %}<span class="text-orange-600 font-semibold">KES {{ r.unpaid }}</span>{% else %}KES 0{% endif %}</td>
                 </tr>
                 {% empty %}
-                <tr><td colspan="10" class="px-3 py-6 text-center text-gray-500">No engineers found.</td></tr>
+                <tr><td colspan="11" class="px-3 py-6 text-center text-gray-500">No engineers found.</td></tr>
                 {% endfor %}
             </tbody>
         </table>

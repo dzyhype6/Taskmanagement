@@ -23,6 +23,7 @@ from .views import (
     payments_list,
     payment_detail,
     manager_report,
+    request_progress,
 )
 
 urlpatterns = [
@@ -44,8 +45,10 @@ urlpatterns = [
     path('tasks/<int:pk>/update/', TaskUpdateView.as_view(), name='task_update'),
     path('tasks/<int:pk>/delete/', TaskDeleteView.as_view(), name='task_delete'),
 
-    # Worker can update task status only
+    # Worker can update task status + progress only
     path('tasks/<int:pk>/worker-update/', worker_task_update, name='worker_task_update'),
+    # Manager asks the assigned engineer how close a task is
+    path('tasks/<int:pk>/request-progress/', request_progress, name='request_progress'),
 
     # Task collaboration: comments & file attachments
     path('tasks/<int:pk>/comment/', add_comment, name='add_comment'),

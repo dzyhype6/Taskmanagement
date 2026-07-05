@@ -42,6 +42,9 @@ class Task(models.Model):
     # organization removed — single-organization app
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     priority = models.CharField(max_length=10, choices=PRIORITY_CHOICES, default='medium')
+    # How close the engineer is to finishing (0–100). The engineer sets this as
+    # they work; the PM reads it to see how far along an in-progress task is.
+    progress = models.PositiveSmallIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     due_date = models.DateField(null=True, blank=True)
@@ -67,6 +70,15 @@ class Task(models.Model):
             self.completed_at = timezone.now()
         elif self.status != 'completed':
             self.completed_at = None
+        # Keep progress in step with status: a completed task is 100%, a task
+        # not yet started is 0%. While in progress the engineer's own value is
+        # kept (clamped to a sensible 0–100, and never a misleading 0 or 100).
+        if self.status == 'completed':
+            self.progress = 100
+        elif self.status == 'pending':
+            self.progress = 0
+        else:  # in_progress — keep the engineer's estimate, but 100% means "done"
+            self.progress = max(0, min(99, int(self.progress or 0)))
         # Approval only makes sense for a completed task. If the task is moved
         # back out of completed, drop the approval too (unless already paid).
         if self.status != 'completed' and self.approved and self.payment_id is None:

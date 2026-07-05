@@ -17,7 +17,7 @@ except Exception:  # pragma: no cover
 
 from django.urls import reverse
 from django.db import transaction
-from django.db.models import Q, Sum
+from django.db.models import Q, Sum, Avg
 from django.utils import timezone
 from decimal import Decimal
 from .models import Task, User, Notification, Payment
@@ -108,9 +108,16 @@ def worker_dashboard(request):
     if user.role != 'worker':
         return redirect('manager_dashboard')
     tasks = Task.objects.filter(assigned_to=user)
+    completed = tasks.filter(status='completed').select_related('payment').order_by('-completed_at')
+    # What the engineer has actually been paid so far (their per-task payslips
+    # plus any monthly salary payments recorded for them).
+    total_paid = user.payments.aggregate(s=Sum('amount'))['s'] or Decimal('0')
     context = {
         'tasks': tasks,
         'worker': user,
+        'completed_tasks': completed,
+        'total_paid': total_paid,
+        'pay_type': user.get_pay_type_display(),
     }
     return render(request, 'core/worker_dashboard.html', context)
 
@@ -333,27 +340,49 @@ def worker_task_update(request, pk):
     # Capture the original status BEFORE the form binds (ModelForm mutates the
     # instance during validation, so reading it later would give the new value).
     old_status = task.status
+    old_progress = task.progress
     if request.method == 'POST':
         form = WorkerTaskStatusForm(request.POST, instance=task)
         if form.is_valid():
-            # Only allow status update for workers
+            # Workers may update status and their progress estimate only.
             task.status = form.cleaned_data['status']
-            task.save()
-            # Notify managers when the engineer moves the task forward.
+            task.progress = form.cleaned_data['progress']
+            task.save()  # save() reconciles progress with the final status
+            # Notify managers when the engineer moves the task forward or
+            # reports fresh progress on it.
+            link = reverse('task_detail', args=[task.pk])
             if task.status != old_status:
-                status_label = task.get_status_display()
-                link = reverse('task_detail', args=[task.pk])
                 notify_managers(
-                    f'{request.user.username} marked "{task.title}" as {status_label}.',
+                    f'{request.user.username} marked "{task.title}" as {task.get_status_display()}.',
                     link,
                 )
-            messages.success(request, "Task status updated. Manager notified.")
+            elif task.progress != old_progress:
+                notify_managers(
+                    f'{request.user.username} updated progress on "{task.title}" to {task.progress}%.',
+                    link,
+                )
+            messages.success(request, "Task updated. Manager notified.")
             return redirect('task_detail', pk=task.pk)
         else:
             messages.error(request, "Please correct the error below.")
     else:
         form = WorkerTaskStatusForm(instance=task)
     return render(request, 'core/worker_task_update.html', {'form': form, 'task': task})
+
+
+@login_required
+def request_progress(request, pk):
+    """Manager pings the assigned engineer to ask how close a task is."""
+    if not _is_manager(request.user):
+        return redirect('worker_dashboard')
+    task = get_object_or_404(Task, pk=pk)
+    if request.method == 'POST':
+        link = reverse('worker_task_update', args=[task.pk])
+        notify(task.assigned_to,
+               f'{request.user.username} is asking how close you are on "{task.title}". Please update your progress.',
+               link)
+        messages.success(request, f"Progress update requested from {task.assigned_to.username}.")
+    return redirect(request.POST.get('next') or reverse('task_detail', args=[task.pk]))
 
 
 # --- Payment: approval, engineer pay profile, and running payslips ---
@@ -568,6 +597,10 @@ def _build_manager_report(request):
         earned = et.filter(approved=True).aggregate(s=Sum('pay_amount'))['s'] or Decimal('0')
         paid = et.filter(approved=True, payment__isnull=False).aggregate(s=Sum('pay_amount'))['s'] or Decimal('0')
         overdue = sum(1 for t in et if t.is_overdue)
+        # Overall progress = average of every task's progress % (completed=100,
+        # pending=0, in-progress = the engineer's reported estimate). This is a
+        # truer "how far along" than the done/total count alone.
+        avg_progress = et.aggregate(a=Avg('progress'))['a']
         rows.append({
             'engineer': e,
             'pay_type': e.get_pay_type_display(),
@@ -578,6 +611,7 @@ def _build_manager_report(request):
             'approved': approved,
             'overdue': overdue,
             'completion': round(100 * completed / total) if total else None,
+            'avg_progress': round(avg_progress) if avg_progress is not None else None,
             'earned': earned,
             'paid': paid,
             'unpaid': earned - paid,

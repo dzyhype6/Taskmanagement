@@ -168,6 +168,68 @@ class PaymentFlowTests(TestCase):
         self.assertEqual(self.client.post(reverse('run_payment', args=[self.casual.pk])).status_code, 302)
 
 
+class ProgressTrackingTests(TestCase):
+    def setUp(self):
+        self.pm = User.objects.create_user(username='pm', password='pw', role='manager')
+        self.eng = User.objects.create_user(username='eng', password='pw', role='worker')
+
+    def test_status_syncs_progress(self):
+        t = Task.objects.create(title='t', assigned_to=self.eng, status='pending', progress=40)
+        self.assertEqual(t.progress, 0)          # pending forces 0
+        t.status = 'in_progress'; t.progress = 60; t.save()
+        self.assertEqual(t.progress, 60)         # in-progress keeps the estimate
+        t.status = 'completed'; t.save()
+        self.assertEqual(t.progress, 100)        # completed forces 100
+
+    def test_in_progress_progress_capped_below_100(self):
+        t = Task.objects.create(title='t', assigned_to=self.eng, status='in_progress', progress=150)
+        self.assertEqual(t.progress, 99)         # never 100 unless completed
+
+    def test_worker_updates_progress(self):
+        t = Task.objects.create(title='t', assigned_to=self.eng, status='pending')
+        self.client.login(username='eng', password='pw')
+        # move to in_progress at 45%
+        resp = self.client.post(reverse('worker_task_update', args=[t.pk]),
+                                {'status': 'in_progress', 'progress': '45'})
+        self.assertEqual(resp.status_code, 302)
+        t.refresh_from_db()
+        self.assertEqual(t.status, 'in_progress')
+        self.assertEqual(t.progress, 45)
+
+    def test_manager_can_request_progress(self):
+        t = Task.objects.create(title='t', assigned_to=self.eng, status='in_progress', progress=20)
+        self.client.login(username='pm', password='pw')
+        before = self.eng.notifications.count()
+        self.client.post(reverse('request_progress', args=[t.pk]))
+        self.assertEqual(self.eng.notifications.count(), before + 1)
+
+    def test_report_average_progress(self):
+        Task.objects.create(title='a', assigned_to=self.eng, status='completed')        # 100
+        Task.objects.create(title='b', assigned_to=self.eng, status='in_progress', progress=50)  # 50
+        Task.objects.create(title='c', assigned_to=self.eng, status='pending')          # 0
+        self.client.login(username='pm', password='pw')
+        resp = self.client.get(reverse('manager_report'))
+        row = next(r for r in resp.context['rows'] if r['engineer'].id == self.eng.id)
+        self.assertEqual(row['avg_progress'], 50)   # mean(100,50,0)
+
+
+class WorkerPayVisibilityTests(TestCase):
+    def test_completed_and_paid_shown_on_worker_dashboard(self):
+        from tasks.models import Payment
+        eng = User.objects.create_user(username='eng', password='pw', role='worker',
+                                       pay_type='per_task', task_rate=Decimal('500'))
+        pay = Payment.objects.create(engineer=eng, basis='per_task',
+                                     amount=Decimal('500'), task_count=1)
+        Task.objects.create(title='done job', assigned_to=eng, status='completed',
+                            approved=True, pay_amount=Decimal('500'), payment=pay)
+        self.client.login(username='eng', password='pw')
+        resp = self.client.get(reverse('worker_dashboard'))
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'done job')
+        self.assertContains(resp, 'Completed work')
+        self.assertEqual(resp.context['total_paid'], Decimal('500'))
+
+
 class TaskOverdueTests(TestCase):
     def test_is_overdue(self):
         eng = User.objects.create_user(username='e', password='p', role='worker')
