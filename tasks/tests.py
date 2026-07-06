@@ -409,6 +409,64 @@ class LatePenaltyTests(TestCase):
         self.assertEqual(t.net_pay, Decimal('1000'))
 
 
+class AbandonmentFineTests(TestCase):
+    def setUp(self):
+        from datetime import timedelta
+        self.timedelta = timedelta
+        self.pm = User.objects.create_user(username='pm', password='pw', role='manager')
+        self.eng = User.objects.create_user(username='eng', password='pw', role='worker',
+                                             pay_type='per_task', task_rate=Decimal('1000'))
+
+    def _overdue_incomplete(self, penalty=30):
+        return Task.objects.create(
+            title='abandoned', assigned_to=self.eng, status='in_progress',
+            due_date=timezone.localdate() - self.timedelta(days=1),
+            pay_amount=Decimal('1000'), late_penalty_percent=penalty)
+
+    def test_incomplete_overdue_has_fine(self):
+        t = self._overdue_incomplete(30)
+        self.assertEqual(t.abandon_fine, Decimal('300.00'))   # 30% of 1000
+
+    def test_fine_deducted_from_other_pay(self):
+        from tasks.models import Payment
+        self._overdue_incomplete(30)                          # KES 300 fine
+        good = Task.objects.create(title='good', assigned_to=self.eng, status='completed',
+                                   approved=True, pay_amount=Decimal('1000'))
+        self.client.login(username='pm', password='pw')
+        self.client.post(reverse('run_payment', args=[self.eng.pk]))
+        pay = Payment.objects.get(engineer=self.eng)
+        self.assertEqual(pay.fine, Decimal('300.00'))
+        self.assertEqual(pay.amount, Decimal('700.00'))       # 1000 earned − 300 fine
+
+    def test_fine_charged_once(self):
+        from tasks.models import Payment
+        t = self._overdue_incomplete(30)
+        Task.objects.create(title='g1', assigned_to=self.eng, status='completed',
+                            approved=True, pay_amount=Decimal('1000'))
+        self.client.login(username='pm', password='pw')
+        self.client.post(reverse('run_payment', args=[self.eng.pk]))
+        t.refresh_from_db()
+        self.assertTrue(t.fine_settled)
+        self.assertEqual(t.abandon_fine, Decimal('0.00'))     # settled -> no further fine
+        # a later payment doesn't re-charge it
+        Task.objects.create(title='g2', assigned_to=self.eng, status='completed',
+                            approved=True, pay_amount=Decimal('500'))
+        self.client.post(reverse('run_payment', args=[self.eng.pk]))
+        second = Payment.objects.filter(engineer=self.eng).order_by('-id').first()
+        self.assertEqual(second.fine, Decimal('0.00'))
+        self.assertEqual(second.amount, Decimal('500.00'))
+
+    def test_payslip_not_negative(self):
+        from tasks.models import Payment
+        self._overdue_incomplete(100)                         # KES 1000 fine
+        Task.objects.create(title='small', assigned_to=self.eng, status='completed',
+                            approved=True, pay_amount=Decimal('200'))
+        self.client.login(username='pm', password='pw')
+        self.client.post(reverse('run_payment', args=[self.eng.pk]))
+        pay = Payment.objects.get(engineer=self.eng)
+        self.assertEqual(pay.amount, Decimal('0.00'))         # floored, never negative
+
+
 class DeadlineTimeTests(TestCase):
     def test_overdue_uses_time_of_day(self):
         from datetime import time as dtime

@@ -91,6 +91,9 @@
             {% else %}
                 <span class="text-gray-500 text-sm">Salaried (monthly) — no per-task cost</span>
             {% endif %}
+            {% if task.abandon_fine %}
+                <div class="mt-1 text-sm text-red-600">⚠ Overdue &amp; incomplete — abandonment fine of KES {{ task.abandon_fine }} ({{ task.late_penalty_percent }}%) will be deducted from {{ task.assigned_to.username }}'s next pay unless completed.</div>
+            {% endif %}
         </div>
         {% endif %}
 

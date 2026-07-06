@@ -562,8 +562,17 @@ def run_payment(request, pk):
     period = (request.POST.get('period') or '').strip()
 
     with transaction.atomic():
+        # Abandonment fines: tasks left incomplete past their deadline are fined
+        # (deducted from whatever this payslip pays). Assessed once, then settled.
+        fine_tasks = [
+            t for t in Task.objects.select_for_update().filter(
+                assigned_to=engineer, fine_settled=False, late_penalty_percent__gt=0
+            ).exclude(status='completed')
+            if t.is_overdue
+        ]
+        fines = sum((t.abandon_fine for t in fine_tasks), Decimal('0'))
+
         if engineer.pay_type == 'per_task':
-            # Lock the rows we're about to pay so two managers can't double-pay.
             unpaid = list(
                 Task.objects.select_for_update()
                 .filter(assigned_to=engineer, approved=True, payment__isnull=True)
@@ -571,16 +580,10 @@ def run_payment(request, pk):
             if not unpaid:
                 messages.error(request, f"{engineer.username} has no approved, unpaid tasks to pay.")
                 return redirect('engineer_detail', pk=engineer.pk)
-            # net_pay applies any late penalty to each task.
-            amount = sum((t.net_pay for t in unpaid), Decimal('0'))
-            payment = Payment.objects.create(
-                engineer=engineer, basis='per_task', period=period,
-                amount=amount, task_count=len(unpaid), created_by=request.user,
-            )
-            Task.objects.filter(pk__in=[t.pk for t in unpaid]).update(payment=payment)
-            msg = f"Paid {engineer.username} KES {amount} for {len(unpaid)} task(s)."
+            gross = sum((t.net_pay for t in unpaid), Decimal('0'))  # net of late penalties
+            basis, extra = 'per_task', {'task_count': len(unpaid)}
+            paid_msg = f"for {len(unpaid)} task(s)"
         elif engineer.pay_type == 'hourly':
-            # Pay every not-yet-paid time log at the engineer's hourly rate.
             logs = list(
                 TimeLog.objects.select_for_update()
                 .filter(user=engineer, payment__isnull=True)
@@ -593,23 +596,33 @@ def run_payment(request, pk):
                 messages.error(request, f"Set an hourly rate for {engineer.username} first.")
                 return redirect('engineer_detail', pk=engineer.pk)
             hours = sum((l.hours or Decimal('0')) for l in logs)
-            amount = hours * rate
-            payment = Payment.objects.create(
-                engineer=engineer, basis='hourly', period=period,
-                amount=amount, hours=hours, created_by=request.user,
-            )
-            TimeLog.objects.filter(pk__in=[l.pk for l in logs]).update(payment=payment)
-            msg = f"Paid {engineer.username} KES {amount} for {hours}h."
+            gross = hours * rate
+            basis, extra = 'hourly', {'hours': hours}
+            paid_msg = f"for {hours}h"
         else:
-            amount = engineer.monthly_salary or Decimal('0')
-            if amount <= 0:
+            gross = engineer.monthly_salary or Decimal('0')
+            if gross <= 0:
                 messages.error(request, f"Set a monthly salary for {engineer.username} first.")
                 return redirect('engineer_detail', pk=engineer.pk)
-            payment = Payment.objects.create(
-                engineer=engineer, basis='monthly', period=period,
-                amount=amount, task_count=0, created_by=request.user,
-            )
-            msg = f"Recorded monthly salary of KES {amount} for {engineer.username}."
+            basis, extra = 'monthly', {}
+            paid_msg = "monthly salary"
+
+        # Apply the fine (never let a payslip go negative).
+        amount = gross - fines
+        if amount < 0:
+            amount = Decimal('0.00')
+        payment = Payment.objects.create(
+            engineer=engineer, basis=basis, period=period,
+            amount=amount, fine=fines, created_by=request.user, **extra,
+        )
+        if basis == 'per_task':
+            Task.objects.filter(pk__in=[t.pk for t in unpaid]).update(payment=payment)
+        elif basis == 'hourly':
+            TimeLog.objects.filter(pk__in=[l.pk for l in logs]).update(payment=payment)
+        if fine_tasks:
+            Task.objects.filter(pk__in=[t.pk for t in fine_tasks]).update(fine_settled=True)
+        msg = f"Paid {engineer.username} KES {amount} {paid_msg}" + (
+            f" (after KES {fines} in late/abandonment fines)." if fines else ".")
 
     link = reverse('payment_detail', args=[payment.pk])
     notify(engineer, f'A payment of KES {payment.amount} was recorded for you.', link)
@@ -638,8 +651,10 @@ def payment_detail(request, pk):
         return redirect('payments_list')
     tasks = payment.tasks.all().order_by('-completed_at')
     time_logs = payment.time_logs.select_related('task').all()
-    return render(request, 'core/payment_detail.html',
-                  {'payment': payment, 'tasks': tasks, 'time_logs': time_logs})
+    return render(request, 'core/payment_detail.html', {
+        'payment': payment, 'tasks': tasks, 'time_logs': time_logs,
+        'gross_before_fine': payment.amount + payment.fine,
+    })
 
 
 # ... existing code above unchanged ...

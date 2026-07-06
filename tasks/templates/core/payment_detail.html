@@ -77,10 +77,18 @@
         {% endif %}
         {% endif %}
 
+        {% if payment.fine %}
+        <div class="flex justify-end mb-2">
+            <div class="text-right text-sm">
+                <div class="text-gray-600">Earnings: KES {{ gross_before_fine }}</div>
+                <div class="text-red-600">Late / abandonment fines: − KES {{ payment.fine }}</div>
+            </div>
+        </div>
+        {% endif %}
         <div class="flex justify-end">
             <div class="bg-green-50 border border-green-200 rounded-lg px-6 py-4 text-center">
                 <div class="text-2xl font-bold text-green-700">KES {{ payment.amount }}</div>
-                <div class="text-xs text-gray-500 uppercase">Total paid</div>
+                <div class="text-xs text-gray-500 uppercase">{% if payment.fine %}Net paid{% else %}Total paid{% endif %}</div>
             </div>
         </div>
     </div>

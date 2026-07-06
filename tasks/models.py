@@ -65,8 +65,13 @@ class Task(models.Model):
     # engineers). For monthly engineers it is simply informational.
     pay_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     # % deducted from this task's pay if it is completed after the deadline.
+    # The same rate is used to fine an engineer who leaves the task INCOMPLETE
+    # past its deadline (deducted from their other pay on the next payslip).
     late_penalty_percent = models.PositiveSmallIntegerField(
         default=0, help_text="Percent of pay deducted if finished after the deadline (0 = none).")
+    # True once an abandonment fine for this task has been charged on a payslip,
+    # so it is never charged twice (and no late penalty is added on top).
+    fine_settled = models.BooleanField(default=False)
     # A completed task must be approved by a manager before it counts for pay.
     approved = models.BooleanField(default=False)
     approved_at = models.DateTimeField(null=True, blank=True)
@@ -150,13 +155,18 @@ class Task(models.Model):
         """True if the task was completed after its deadline."""
         return bool(self.completed_at and self.deadline and self.completed_at > self.deadline)
 
+    def _penalty(self):
+        from decimal import Decimal, ROUND_HALF_UP
+        amt = (self.pay_amount or Decimal('0')) * Decimal(self.late_penalty_percent) / Decimal('100')
+        return amt.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
     @property
     def penalty_amount(self):
-        """KES deducted from this task's pay for finishing late."""
-        from decimal import Decimal, ROUND_HALF_UP
-        if self.was_late and self.late_penalty_percent:
-            amt = (self.pay_amount or Decimal('0')) * Decimal(self.late_penalty_percent) / Decimal('100')
-            return amt.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        """KES deducted from this task's pay for finishing late. (Not applied if
+        an abandonment fine was already charged for it.)"""
+        from decimal import Decimal
+        if self.was_late and self.late_penalty_percent and not self.fine_settled:
+            return self._penalty()
         return Decimal('0.00')
 
     @property
@@ -164,6 +174,16 @@ class Task(models.Model):
         """Task pay after any late penalty (what a per-task engineer is paid)."""
         from decimal import Decimal
         return (self.pay_amount or Decimal('0')) - self.penalty_amount
+
+    @property
+    def abandon_fine(self):
+        """KES fined for leaving this task incomplete past its deadline — charged
+        against the engineer's other pay. Zero once settled or if completed."""
+        from decimal import Decimal
+        if (self.status != 'completed' and self.is_overdue
+                and self.late_penalty_percent and not self.fine_settled):
+            return self._penalty()
+        return Decimal('0.00')
 
     @property
     def is_paid(self):
@@ -280,6 +300,7 @@ class Payment(models.Model):
     amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     task_count = models.PositiveIntegerField(default=0)
     hours = models.DecimalField(max_digits=8, decimal_places=2, default=0)  # for hourly payslips
+    fine = models.DecimalField(max_digits=12, decimal_places=2, default=0)  # abandonment fines deducted
     note = models.CharField(max_length=255, blank=True)
     created_by = models.ForeignKey(
         User, on_delete=models.SET_NULL, null=True, related_name='payments_made',
