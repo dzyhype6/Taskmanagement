@@ -42,11 +42,19 @@
                 <div class="bg-gray-50 rounded p-3"><div class="text-xl font-bold text-orange-600">{{ unpaid_hours }}h</div><div class="text-xs text-gray-500">Unpaid hours</div></div>
                 <div class="bg-gray-50 rounded p-3"><div class="text-xl font-bold text-green-700">KES {{ hourly_unpaid }}</div><div class="text-xs text-gray-500">Due (unpaid)</div></div>
             </div>
+            {% elif engineer.pay_type == 'per_task' %}
+            <div class="grid grid-cols-4 gap-2 text-center mb-2">
+                <div class="bg-amber-50 rounded p-3"><div class="text-lg font-bold text-amber-700">KES {{ pending_earnings }}</div><div class="text-xs text-gray-500">Pending approval</div></div>
+                <div class="bg-gray-50 rounded p-3"><div class="text-lg font-bold text-blue-800">KES {{ earned }}</div><div class="text-xs text-gray-500">Approved</div></div>
+                <div class="bg-gray-50 rounded p-3"><div class="text-lg font-bold text-green-700">KES {{ paid }}</div><div class="text-xs text-gray-500">Paid</div></div>
+                <div class="bg-gray-50 rounded p-3"><div class="text-lg font-bold text-orange-600">KES {{ unpaid }}</div><div class="text-xs text-gray-500">Unpaid</div></div>
+            </div>
+            {% if pending_count %}<p class="text-xs text-amber-700 mb-3">{{ pending_count }} completed task(s) awaiting your approval — approve them to move the pay to "Approved".</p>{% endif %}
             {% else %}
-            <div class="grid grid-cols-3 gap-3 text-center mb-4">
-                <div class="bg-gray-50 rounded p-3"><div class="text-xl font-bold text-blue-800">KES {{ earned }}</div><div class="text-xs text-gray-500">Approved</div></div>
-                <div class="bg-gray-50 rounded p-3"><div class="text-xl font-bold text-green-700">KES {{ paid }}</div><div class="text-xs text-gray-500">Paid</div></div>
-                <div class="bg-gray-50 rounded p-3"><div class="text-xl font-bold text-orange-600">KES {{ unpaid }}</div><div class="text-xs text-gray-500">Unpaid</div></div>
+            <div class="bg-gray-50 rounded p-4 text-center mb-4">
+                <div class="text-lg font-bold text-gray-700">Monthly salary</div>
+                <div class="text-sm text-gray-500">KES {{ engineer.monthly_salary }} / month{% if engineer.monthly_salary == 0 %} — not set yet{% endif %}</div>
+                <div class="text-xs text-gray-400 mt-1">Paid a fixed salary, not per task. Switch pay type to per-task or hourly to pay for individual tasks.</div>
             </div>
             {% endif %}
             <form method="post" action="{% url 'run_payment' engineer.pk %}" class="flex items-end gap-2">

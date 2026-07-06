@@ -91,6 +91,10 @@ def engineer_detail(request, pk):
     earned = sum((t.net_pay for t in approved_list), Decimal('0'))
     paid = sum((t.net_pay for t in approved_list if t.is_paid), Decimal('0'))
     payable_tasks = sum(1 for t in approved_list if not t.is_paid)
+    # Completed work not yet approved — its pay is "pending" until the PM approves.
+    pending_list = list(tasks.filter(status='completed', approved=False))
+    pending_earnings = sum((t.net_pay for t in pending_list), Decimal('0'))
+    pending_count = len(pending_list)
     # Time snapshot (all pay types accrue hours; only hourly staff bill them).
     logs = TimeLog.objects.filter(user=engineer)
     logged_hours = logs.aggregate(s=Sum('hours'))['s'] or Decimal('0')
@@ -104,6 +108,8 @@ def engineer_detail(request, pk):
         'paid': paid,
         'unpaid': earned - paid,
         'payable_tasks': payable_tasks,
+        'pending_earnings': pending_earnings,
+        'pending_count': pending_count,
         'logged_hours': logged_hours,
         'unpaid_hours': unpaid_hours,
         'hourly_unpaid': hourly_unpaid,
