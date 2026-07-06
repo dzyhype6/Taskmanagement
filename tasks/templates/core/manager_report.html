@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="max-w-6xl mx-auto my-8">
+    <div class="flex items-center justify-between mb-2">
+        <h1 class="text-2xl font-bold text-blue-800">Progress &amp; Payment Report</h1>
+        <div class="flex gap-2 no-print">
+            <a href="{% url 'manager_report' %}?format=pdf{% if start %}&start={{ start }}{% endif %}{% if end %}&end={{ end }}{% endif %}"
+               class="bg-blue-800 text-white px-3 py-2 rounded hover:bg-blue-900 transition">🖨 Download PDF</a>
+        </div>
+    </div>
+    <p class="text-sm text-gray-500 mb-6">Generated {{ generated_at|date:"M d, Y H:i" }} — live snapshot, produced on request.</p>
+
+    <form method="get" class="mb-6 flex flex-wrap items-end gap-3 no-print">
+        <div>
+            <label class="block text-sm font-medium text-gray-700">From (task created)</label>
+            <input type="date" name="start" value="{{ start }}" class="border rounded px-3 py-2">
+        </div>
+        <div>
+            <label class="block text-sm font-medium text-gray-700">To</label>
+            <input type="date" name="end" value="{{ end }}" class="border rounded px-3 py-2">
+        </div>
+        <button type="submit" class="bg-blue-800 text-white px-4 py-2 rounded">Apply</button>
+        <a href="{% url 'manager_report' %}" class="text-gray-600 hover:underline">Clear</a>
+    </form>
+
+    <!-- Totals -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        <div class="bg-white shadow rounded-lg p-4 text-center"><div class="text-2xl font-bold text-blue-800">{{ total_tasks }}</div><div class="text-xs text-gray-500">Tasks</div></div>
+        <div class="bg-white shadow rounded-lg p-4 text-center"><div class="text-2xl font-bold text-green-700">{% if total_completion is not None %}{{ total_completion }}%{% else %}—{% endif %}</div><div class="text-xs text-gray-500">Completed</div></div>
+        <div class="bg-white shadow rounded-lg p-4 text-center"><div class="text-2xl font-bold text-indigo-700">KES {{ total_earned }}</div><div class="text-xs text-gray-500">Task pay approved</div></div>
+        <div class="bg-white shadow rounded-lg p-4 text-center"><div class="text-2xl font-bold text-orange-600">KES {{ total_unpaid }}</div><div class="text-xs text-gray-500">Awaiting payment</div></div>
+    </div>
+
+    <div class="bg-white shadow rounded-lg overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200 text-sm">
+            <thead class="bg-blue-100">
+                <tr>
+                    <th class="px-3 py-2 text-left text-xs font-medium text-blue-800 uppercase">Engineer</th>
+                    <th class="px-3 py-2 text-left text-xs font-medium text-blue-800 uppercase">Pay</th>
+                    <th class="px-3 py-2 text-left text-xs font-medium text-blue-800 uppercase">Tasks</th>
+                    <th class="px-3 py-2 text-left text-xs font-medium text-blue-800 uppercase">In progress</th>
+                    <th class="px-3 py-2 text-left text-xs font-medium text-blue-800 uppercase">Completed</th>
+                    <th class="px-3 py-2 text-left text-xs font-medium text-blue-800 uppercase">Approved</th>
+                    <th class="px-3 py-2 text-left text-xs font-medium text-blue-800 uppercase">Overdue</th>
+                    <th class="px-3 py-2 text-left text-xs font-medium text-blue-800 uppercase">Completed %</th>
+                    <th class="px-3 py-2 text-left text-xs font-medium text-blue-800 uppercase">Overall progress</th>
+                    <th class="px-3 py-2 text-left text-xs font-medium text-blue-800 uppercase">Hours (logged/est)</th>
+                    <th class="px-3 py-2 text-left text-xs font-medium text-blue-800 uppercase">Earned</th>
+                    <th class="px-3 py-2 text-left text-xs font-medium text-blue-800 uppercase">Unpaid</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+                {% for r in rows %}
+                <tr class="hover:bg-gray-50">
+                    <td class="px-3 py-2"><a href="{% url 'engineer_detail' r.engineer.pk %}" class="text-blue-600 hover:underline">{{ r.engineer.username }}</a></td>
+                    <td class="px-3 py-2 text-gray-600">{{ r.pay_type }}</td>
+                    <td class="px-3 py-2">{{ r.total }}</td>
+                    <td class="px-3 py-2">{{ r.in_progress }}</td>
+                    <td class="px-3 py-2">{{ r.completed }}</td>
+                    <td class="px-3 py-2">{{ r.approved }}</td>
+                    <td class="px-3 py-2">{% if r.overdue %}<span class="text-red-600 font-semibold">{{ r.overdue }}</span>{% else %}0{% endif %}</td>
+                    <td class="px-3 py-2">{% if r.completion is not None %}{{ r.completion }}%{% else %}—{% endif %}</td>
+                    <td class="px-3 py-2">
+                        {% if r.avg_progress is not None %}
+                        <div class="flex items-center gap-2">
+                            <div class="w-16 bg-gray-200 rounded-full h-2"><div class="h-2 rounded-full bg-blue-600" style="width: {{ r.avg_progress }}%"></div></div>
+                            <span class="text-xs">{{ r.avg_progress }}%</span>
+                        </div>
+                        {% else %}—{% endif %}
+                    </td>
+                    <td class="px-3 py-2 whitespace-nowrap">{{ r.logged_hours }}h{% if r.estimated_hours %} <span class="text-gray-400">/ {{ r.estimated_hours }}h</span>{% endif %}</td>
+                    <td class="px-3 py-2">KES {{ r.earned }}</td>
+                    <td class="px-3 py-2">{% if r.unpaid %}<span class="text-orange-600 font-semibold">KES {{ r.unpaid }}</span>{% else %}KES 0{% endif %}</td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="12" class="px-3 py-6 text-center text-gray-500">No engineers found.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

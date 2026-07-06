@@ -68,11 +68,47 @@
                 {% endif %}
             </div>
 
+            <div class="mb-4 flex gap-4">
+                <div class="flex-1">
+                    <label for="{{ form.due_date.id_for_label }}" class="block mb-2 text-sm font-medium text-gray-700">Due Date</label>
+                    {{ form.due_date }}
+                    {% if form.due_date.errors %}
+                        <p class="text-red-600 text-sm mt-1">{{ form.due_date.errors.0 }}</p>
+                    {% endif %}
+                </div>
+                <div class="w-40">
+                    <label for="{{ form.due_time.id_for_label }}" class="block mb-2 text-sm font-medium text-gray-700">Due Time</label>
+                    {{ form.due_time }}
+                    {% if form.due_time.errors %}
+                        <p class="text-red-600 text-sm mt-1">{{ form.due_time.errors.0 }}</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="mb-4">
+                <label for="{{ form.estimated_hours.id_for_label }}" class="block mb-2 text-sm font-medium text-gray-700">Estimated hours</label>
+                {{ form.estimated_hours }}
+                <p class="text-xs text-gray-500 mt-1">{{ form.estimated_hours.help_text }}</p>
+                {% if form.estimated_hours.errors %}
+                    <p class="text-red-600 text-sm mt-1">{{ form.estimated_hours.errors.0 }}</p>
+                {% endif %}
+            </div>
+
+            <div class="mb-4">
+                <label for="{{ form.pay_amount.id_for_label }}" class="block mb-2 text-sm font-medium text-gray-700">Pay for this task (KES)</label>
+                {{ form.pay_amount }}
+                <p class="text-xs text-gray-500 mt-1">{{ form.pay_amount.help_text }}</p>
+                {% if form.pay_amount.errors %}
+                    <p class="text-red-600 text-sm mt-1">{{ form.pay_amount.errors.0 }}</p>
+                {% endif %}
+            </div>
+
             <div class="mb-6">
-                <label for="{{ form.due_date.id_for_label }}" class="block mb-2 text-sm font-medium text-gray-700">Due Date</label>
-                {{ form.due_date }}
-                {% if form.due_date.errors %}
-                    <p class="text-red-600 text-sm mt-1">{{ form.due_date.errors.0 }}</p>
+                <label for="{{ form.late_penalty_percent.id_for_label }}" class="block mb-2 text-sm font-medium text-gray-700">Late penalty (%)</label>
+                {{ form.late_penalty_percent }}
+                <p class="text-xs text-gray-500 mt-1">{{ form.late_penalty_percent.help_text }}</p>
+                {% if form.late_penalty_percent.errors %}
+                    <p class="text-red-600 text-sm mt-1">{{ form.late_penalty_percent.errors.0 }}</p>
                 {% endif %}
             </div>
 

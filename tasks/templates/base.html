@@ -68,6 +68,8 @@
                     <a href="{% url 'engineer_list' %}" class="text-blue-800 hover:underline">Engineers</a>
                     <a href="{% url 'register' %}" class="text-blue-800 hover:underline">Create New User</a>
                     <a href="{% url 'reports' %}" class="text-blue-800 hover:underline">Reports</a>
+                    <a href="{% url 'manager_report' %}" class="text-blue-800 hover:underline">PM Report</a>
+                    <a href="{% url 'payments_list' %}" class="text-blue-800 hover:underline">Payments</a>
                 {% elif user.role == 'manager' %}
                     <a href="{% url 'manager_dashboard' %}" class="text-blue-800 hover:underline">PM Dashboard</a>
                     <a href="{% url 'task_list' %}" class="text-blue-800 hover:underline">All Tasks</a>
@@ -75,10 +77,13 @@
                     <a href="{% url 'engineer_list' %}" class="text-blue-800 hover:underline">Engineers</a>
                     <a href="{% url 'register' %}" class="text-blue-800 hover:underline">Create New User</a>
                     <a href="{% url 'reports' %}" class="text-blue-800 hover:underline">Reports</a>
+                    <a href="{% url 'manager_report' %}" class="text-blue-800 hover:underline">PM Report</a>
+                    <a href="{% url 'payments_list' %}" class="text-blue-800 hover:underline">Payments</a>
                 {% elif user.role == 'worker' %}
                     <a href="{% url 'worker_dashboard' %}" class="text-blue-800 hover:underline">Engineer Dashboard</a>
                     <a href="{% url 'task_list' %}" class="text-blue-800 hover:underline">My Tasks</a>
                     <a href="{% url 'reports' %}" class="text-blue-800 hover:underline">My Reports</a>
+                    <a href="{% url 'payments_list' %}" class="text-blue-800 hover:underline">My Payments</a>
                 {% else %}
                     <a href="{% url 'task_list' %}" class="text-blue-800 hover:underline">Tasks</a>
                     <a href="{% url 'reports' %}" class="text-blue-800 hover:underline">Reports</a>
@@ -89,6 +94,23 @@
 
     <!-- Main Content -->
     <main class="{% if user.is_authenticated %}ml-56{% endif %} pt-20 px-8">
+        {% if user.is_authenticated %}
+        <div class="flex justify-end no-print">
+            <div id="liveClock" class="text-sm text-gray-500 font-medium">&nbsp;</div>
+        </div>
+        <script>
+        (function(){
+          function tick(){
+            var el=document.getElementById('liveClock'); if(!el) return;
+            var now=new Date();
+            var day=now.toLocaleDateString(undefined,{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+            var time=now.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+            el.innerHTML='🗓 '+day+' &middot; '+time;
+          }
+          tick(); setInterval(tick,1000);
+        })();
+        </script>
+        {% endif %}
         {% if messages %}
             <div class="max-w-xl mx-auto mt-6">
               {% for message in messages %}

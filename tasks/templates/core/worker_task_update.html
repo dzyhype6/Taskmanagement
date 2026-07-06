@@ -26,7 +26,7 @@
                 </div>
             {% endif %}
 
-            <div class="mb-6">
+            <div class="mb-4">
                 <label for="{{ form.status.id_for_label }}" class="block mb-2 text-sm font-medium text-gray-700">Status</label>
                 {{ form.status }}
                 {% if form.status.errors %}
@@ -34,8 +34,26 @@
                 {% endif %}
             </div>
 
+            {% if task.has_subtasks %}
+                <div class="mb-6 bg-blue-50 border border-blue-100 rounded p-3 text-sm text-blue-800">
+                    Progress on this task is tracked by its <b>checklist</b> ({{ task.subtask_counts.done }}/{{ task.subtask_counts.total }} done = {{ task.progress }}%).
+                    Tick items on the <a href="{% url 'task_detail' task.pk %}" class="underline">task page</a>.
+                </div>
+            {% else %}
+                <div class="mb-6">
+                    <label for="{{ form.progress.id_for_label }}" class="block mb-2 text-sm font-medium text-gray-700">
+                        How close are you? <span id="progressVal" class="font-bold text-blue-800">{{ task.progress }}%</span>
+                    </label>
+                    {{ form.progress }}
+                    <p class="text-xs text-gray-500 mt-1">{{ form.progress.help_text }}</p>
+                    {% if form.progress.errors %}
+                        <p class="text-red-600 text-sm mt-1">{{ form.progress.errors.0 }}</p>
+                    {% endif %}
+                </div>
+            {% endif %}
+
             <button type="submit" class="w-full bg-green-600 text-white font-semibold py-2 px-4 rounded hover:bg-green-700 transition">
-                Update Status
+                Update
             </button>
         </form>
 

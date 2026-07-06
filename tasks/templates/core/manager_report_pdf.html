@@ -1,0 +1,71 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>CodeForge Progress &amp; Payment Report</title>
+  <style>
+    body { font-family: Helvetica, Arial, sans-serif; font-size: 11px; color: #111; }
+    h1 { color: #0b3fa0; margin-bottom: 2px; font-size: 20px; }
+    h2 { color: #0b3fa0; font-size: 14px; margin-top: 18px; margin-bottom: 4px; }
+    .meta { color: #555; margin: 0; }
+    .cards td { border: 1px solid #cfd8e3; padding: 8px; text-align: center; }
+    .cards .num { font-size: 18px; font-weight: bold; color: #0b3fa0; }
+    table { width: 100%; border-collapse: collapse; margin-top: 6px; }
+    th, td { padding: 5px 7px; border: 1px solid #ddd; }
+    th { background: #eef4ff; text-align: left; }
+    .overdue { color: #b00020; font-weight: bold; }
+    .muted { color: #777; }
+    .foot { margin-top: 18px; color: #777; font-size: 10px; text-align: center; }
+  </style>
+</head>
+<body>
+  <h1>CodeForge Engineering — Progress &amp; Payment Report</h1>
+  <p class="meta">Generated: {{ generated_at|date:"M d, Y H:i" }}
+    {% if start or end %} · Window: {{ start|default:"…" }} → {{ end|default:"…" }}{% endif %}</p>
+
+  <h2>Summary</h2>
+  <table class="cards">
+    <tr>
+      <td><div class="num">{{ total_tasks }}</div>Tasks</td>
+      <td><div class="num">{% if total_completion is not None %}{{ total_completion }}%{% else %}—{% endif %}</div>Completed</td>
+      <td><div class="num">KES {{ total_earned }}</div>Task pay approved</td>
+      <td><div class="num">KES {{ total_paid }}</div>Paid</td>
+      <td><div class="num">KES {{ total_unpaid }}</div>Unpaid</td>
+    </tr>
+  </table>
+
+  <h2>Per-Engineer Breakdown</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Engineer</th><th>Pay</th><th>Tasks</th><th>In Progress</th>
+        <th>Completed</th><th>Approved</th><th>Overdue</th><th>Completed %</th>
+        <th>Overall progress</th><th>Logged h</th><th>Est h</th><th>Earned</th><th>Unpaid</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td>{{ r.engineer.username }}</td>
+        <td>{{ r.pay_type }}</td>
+        <td>{{ r.total }}</td>
+        <td>{{ r.in_progress }}</td>
+        <td>{{ r.completed }}</td>
+        <td>{{ r.approved }}</td>
+        <td {% if r.overdue %}class="overdue"{% endif %}>{{ r.overdue }}</td>
+        <td>{% if r.completion is not None %}{{ r.completion }}%{% else %}—{% endif %}</td>
+        <td>{% if r.avg_progress is not None %}{{ r.avg_progress }}%{% else %}—{% endif %}</td>
+        <td>{{ r.logged_hours }}</td>
+        <td>{{ r.estimated_hours }}</td>
+        <td>KES {{ r.earned }}</td>
+        <td>KES {{ r.unpaid }}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="13" class="muted">No engineers found.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <p class="foot">CodeForge Engineering · Internal Task Manager · report generated on request</p>
+</body>
+</html>

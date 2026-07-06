@@ -22,6 +22,25 @@
             {% endif %}
         </p>
 
+        <!-- Progress toward completion -->
+        <div class="mb-3">
+            <div class="flex items-center justify-between mb-1">
+                <span class="font-semibold text-gray-700 text-sm">Progress</span>
+                <span class="text-sm font-bold {% if task.progress == 100 %}text-green-700{% else %}text-blue-800{% endif %}">{{ task.progress }}%</span>
+            </div>
+            <div class="w-full bg-gray-200 rounded-full h-3">
+                <div class="h-3 rounded-full {% if task.progress == 100 %}bg-green-600{% else %}bg-blue-600{% endif %}" style="width: {{ task.progress }}%"></div>
+            </div>
+            {% if user.is_superuser or user.role == 'manager' %}
+                {% if task.status != 'completed' %}
+                <form method="post" action="{% url 'request_progress' task.pk %}" class="mt-2 no-print">
+                    {% csrf_token %}
+                    <button type="submit" class="text-xs bg-blue-100 text-blue-800 px-3 py-1 rounded hover:bg-blue-200 transition">📩 Ask engineer how close they are</button>
+                </form>
+                {% endif %}
+            {% endif %}
+        </div>
+
         <p class="mb-2"><span class="font-semibold text-gray-700">Priority:</span>
             {% if task.priority == 'high' %}
                 <span class="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-800">High</span>
@@ -40,25 +59,164 @@
             </p>
         {% endif %}
 
-        <p class="mb-2"><span class="font-semibold text-gray-700">Due Date:</span>
+        <p class="mb-2"><span class="font-semibold text-gray-700">Due:</span>
             {% if task.due_date %}
-                {{ task.due_date|date:"M d, Y" }}
+                {{ task.due_date|date:"M d, Y" }}{% if task.due_time %} at {{ task.due_time|time:"g:i A" }}{% endif %}
+                {% if task.is_overdue %}<span class="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700">Overdue</span>{% endif %}
             {% else %}
                 <span class="text-gray-500">No due date</span>
             {% endif %}
         </p>
 
-        <div class="mt-4 flex space-x-4">
+        <!-- Time: estimate vs logged -->
+        <p class="mb-2"><span class="font-semibold text-gray-700">Time:</span>
+            <span class="text-gray-800">{{ logged_hours }}h logged</span>
+            {% if task.estimated_hours %}<span class="text-gray-500">· {{ task.estimated_hours }}h estimated</span>{% endif %}
+        </p>
+
+        <!-- Cost of this work (managers only) -->
+        {% if user.is_superuser or user.role == 'manager' %}
+        <div class="mb-2 p-3 bg-gray-50 border border-gray-200 rounded">
+            <span class="font-semibold text-gray-700">Cost of this work:</span>
+            {% if work_cost_kind == 'hourly' %}
+                <span class="font-bold text-blue-800">KES {{ work_cost }}</span>
+                <span class="text-gray-500 text-sm">({{ logged_hours }}h × KES {{ task.assigned_to.hourly_rate }}/h)</span>
+            {% elif work_cost_kind == 'per_task' %}
+                <span class="font-bold text-blue-800">KES {{ work_cost }}</span>
+                {% if task.penalty_amount %}
+                    <span class="text-red-600 text-sm">(was KES {{ task.pay_amount }}, −KES {{ task.penalty_amount }} late penalty {{ task.late_penalty_percent }}%)</span>
+                {% elif task.late_penalty_percent %}
+                    <span class="text-gray-500 text-sm">(late penalty {{ task.late_penalty_percent }}% applies if overdue)</span>
+                {% endif %}
+            {% else %}
+                <span class="text-gray-500 text-sm">Salaried (monthly) — no per-task cost</span>
+            {% endif %}
+            {% if task.abandon_fine %}
+                <div class="mt-1 text-sm text-red-600">⚠ Overdue &amp; incomplete — abandonment fine of KES {{ task.abandon_fine }} ({{ task.late_penalty_percent }}%) will be deducted from {{ task.assigned_to.username }}'s next pay unless completed.</div>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <!-- Payment status -->
+        <p class="mb-2">
+            <span class="font-semibold text-gray-700">Payment:</span>
+            {% if task.approved %}
+                <span class="ml-1 inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">Approved for payment</span>
+            {% endif %}
+            {% if task.is_paid %}
+                <a href="{% url 'payment_detail' task.payment_id %}" class="ml-1 inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-gray-200 text-gray-700 hover:underline">Paid ✓</a>
+            {% endif %}
+            {% if not task.approved and not task.is_paid %}
+                <span class="text-gray-500 text-sm">not yet approved</span>
+            {% endif %}
+        </p>
+
+        <div class="mt-4 flex flex-wrap gap-4">
             {% if user.is_authenticated %}
                 {% if user.is_superuser or user.role == 'manager' %}
-                    <a href="{% url 'task_update' task.pk %}" class="bg-yellow-600 text-white px-4 py-2 rounded hover:bg-yellow-700 transition">Edit</a>
-                    <a href="{% url 'task_delete' task.pk %}" class="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 transition">Delete</a>
+                    {% if task.status == 'completed' and not task.approved %}
+                        <form method="post" action="{% url 'task_approve' task.pk %}">
+                            {% csrf_token %}
+                            <button type="submit" class="bg-emerald-600 text-white px-4 py-2 rounded hover:bg-emerald-700 transition">✓ Approve for payment</button>
+                        </form>
+                    {% endif %}
+                    {% if not task.is_paid %}
+                        <a href="{% url 'task_update' task.pk %}" class="bg-yellow-600 text-white px-4 py-2 rounded hover:bg-yellow-700 transition">Edit</a>
+                        <a href="{% url 'task_delete' task.pk %}" class="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 transition">Delete</a>
+                    {% endif %}
                 {% elif user.role == 'worker' and task.assigned_to == user %}
                     <a href="{% url 'worker_task_update' task.pk %}" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition">Update Status</a>
                 {% endif %}
             {% endif %}
             <a href="{% url 'task_list' %}" class="bg-gray-200 text-gray-700 px-4 py-2 rounded hover:bg-gray-300 transition">Back to Tasks</a>
         </div>
+    </div>
+
+    <!-- Time log -->
+    <div class="bg-white shadow rounded-lg p-8 mt-6">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-lg font-bold text-blue-800">Time log</h2>
+            <span class="text-sm text-gray-600">{{ logged_hours }}h total{% if task.estimated_hours %} · {{ task.estimated_hours }}h estimated{% endif %}</span>
+        </div>
+        {% if time_logs %}
+            <ul style="list-style:none;padding-left:0" class="divide-y divide-gray-100 mb-4">
+                {% for log in time_logs %}
+                <li class="py-2 flex items-center justify-between text-sm">
+                    <div>
+                        <span class="font-semibold text-gray-800">{{ log.hours }}h</span>
+                        <span class="text-gray-500">· {{ log.user.username }} · {{ log.work_date|date:"M d, Y" }}</span>
+                        {% if log.note %}<span class="text-gray-600">— {{ log.note }}</span>{% endif %}
+                        {% if log.is_paid %}<span class="ml-1 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-200 text-gray-700">paid</span>{% endif %}
+                    </div>
+                    {% if not log.is_paid %}
+                        {% if user.is_superuser or user.role == 'manager' or log.user == user %}
+                        <form method="post" action="{% url 'delete_timelog' log.pk %}">
+                            {% csrf_token %}
+                            <button type="submit" class="text-red-500 hover:text-red-700 text-xs">Remove</button>
+                        </form>
+                        {% endif %}
+                    {% endif %}
+                </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p class="text-gray-500 text-sm mb-4">No time logged yet.</p>
+        {% endif %}
+        {% if can_log_time %}
+        <form method="post" action="{% url 'add_timelog' task.pk %}" class="grid grid-cols-1 sm:grid-cols-4 gap-2 items-end">
+            {% csrf_token %}
+            <div><label class="block text-xs text-gray-600 mb-1">Hours</label>{{ timelog_form.hours }}</div>
+            <div><label class="block text-xs text-gray-600 mb-1">Date</label>{{ timelog_form.work_date }}</div>
+            <div><label class="block text-xs text-gray-600 mb-1">Note</label>{{ timelog_form.note }}</div>
+            <button type="submit" class="bg-blue-800 text-white px-4 py-2 rounded text-sm hover:bg-blue-900 transition">Log time</button>
+        </form>
+        {% endif %}
+    </div>
+
+    <!-- Checklist / subtasks -->
+    <div class="bg-white shadow rounded-lg p-8 mt-6">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-lg font-bold text-blue-800">Checklist</h2>
+            {% if subtask_counts.total %}
+                <span class="text-sm text-gray-600">{{ subtask_counts.done }} / {{ subtask_counts.total }} done
+                    {% if task.status == 'in_progress' %}· drives progress ({{ task.progress }}%){% endif %}
+                </span>
+            {% endif %}
+        </div>
+        {% if subtasks %}
+            <ul style="list-style:none;padding-left:0" class="divide-y divide-gray-100 mb-4">
+                {% for s in subtasks %}
+                <li class="py-2 flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        {% if can_edit_subtasks %}
+                        <form method="post" action="{% url 'toggle_subtask' s.pk %}">
+                            {% csrf_token %}
+                            <button type="submit" class="w-5 h-5 rounded border {% if s.is_done %}bg-green-600 border-green-600 text-white{% else %}border-gray-400 text-transparent hover:border-blue-500{% endif %} flex items-center justify-center text-xs" title="Toggle">✓</button>
+                        </form>
+                        {% else %}
+                        <span class="w-5 h-5 rounded border {% if s.is_done %}bg-green-600 border-green-600 text-white{% else %}border-gray-300{% endif %} flex items-center justify-center text-xs">{% if s.is_done %}✓{% endif %}</span>
+                        {% endif %}
+                        <span class="text-sm {% if s.is_done %}line-through text-gray-400{% else %}text-gray-800{% endif %}">{{ s.title }}</span>
+                    </div>
+                    {% if can_edit_subtasks %}
+                    <form method="post" action="{% url 'delete_subtask' s.pk %}">
+                        {% csrf_token %}
+                        <button type="submit" class="text-red-500 hover:text-red-700 text-xs">Remove</button>
+                    </form>
+                    {% endif %}
+                </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p class="text-gray-500 text-sm mb-4">No checklist yet.{% if can_edit_subtasks %} Break this task into steps below — progress will be tracked from the ticked items.{% endif %}</p>
+        {% endif %}
+        {% if can_edit_subtasks %}
+        <form method="post" action="{% url 'add_subtask' task.pk %}" class="flex items-center gap-3">
+            {% csrf_token %}
+            <input type="text" name="title" placeholder="Add a checklist item…" maxlength="255" class="flex-1 border rounded px-3 py-2 text-sm">
+            <button type="submit" class="bg-blue-800 text-white px-4 py-2 rounded text-sm hover:bg-blue-900 transition">Add</button>
+        </form>
+        {% endif %}
     </div>
 
     <!-- Attachments -->

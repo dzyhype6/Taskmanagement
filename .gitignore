@@ -1,3 +1,15 @@
 
 # Local email secret (Gmail App Password)
 TaskManagement/email_config.py
+
+# Local development artifacts
+.venv/
+dev.log
+shot_*.png
+w_*.png
+m_*.png
+uitest*.mjs
+s_*.png
+e_*.png
+p_*.png
+f_*.png
