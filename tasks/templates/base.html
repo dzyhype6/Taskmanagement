@@ -67,6 +67,7 @@
                     <a href="{% url 'task_create' %}" class="text-blue-800 hover:underline">Create Task</a>
                     <a href="{% url 'engineer_list' %}" class="text-blue-800 hover:underline">Engineers</a>
                     <a href="{% url 'register' %}" class="text-blue-800 hover:underline">Create New User</a>
+                    <a href="{% url 'approvals' %}" class="text-blue-800 hover:underline">Approvals{% if nav_pending_approvals %} <span class="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-bold bg-emerald-600 text-white">{{ nav_pending_approvals }}</span>{% endif %}</a>
                     <a href="{% url 'reports' %}" class="text-blue-800 hover:underline">Reports</a>
                     <a href="{% url 'manager_report' %}" class="text-blue-800 hover:underline">PM Report</a>
                     <a href="{% url 'payments_list' %}" class="text-blue-800 hover:underline">Payments</a>
@@ -76,6 +77,7 @@
                     <a href="{% url 'task_create' %}" class="text-blue-800 hover:underline">Create Task</a>
                     <a href="{% url 'engineer_list' %}" class="text-blue-800 hover:underline">Engineers</a>
                     <a href="{% url 'register' %}" class="text-blue-800 hover:underline">Create New User</a>
+                    <a href="{% url 'approvals' %}" class="text-blue-800 hover:underline">Approvals{% if nav_pending_approvals %} <span class="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-bold bg-emerald-600 text-white">{{ nav_pending_approvals }}</span>{% endif %}</a>
                     <a href="{% url 'reports' %}" class="text-blue-800 hover:underline">Reports</a>
                     <a href="{% url 'manager_report' %}" class="text-blue-800 hover:underline">PM Report</a>
                     <a href="{% url 'payments_list' %}" class="text-blue-800 hover:underline">Payments</a>

@@ -23,6 +23,8 @@ from .views import (
     add_timelog,
     delete_timelog,
     task_approve,
+    approvals,
+    approve_all,
     engineer_pay_edit,
     run_payment,
     payments_list,
@@ -79,6 +81,8 @@ urlpatterns = [
 
     # Payment: approve a completed task, set engineer pay, run payslips
     path('tasks/<int:pk>/approve/', task_approve, name='task_approve'),
+    path('approvals/', approvals, name='approvals'),
+    path('approvals/approve-all/', approve_all, name='approve_all'),
     path('engineers/<int:pk>/pay-settings/', engineer_pay_edit, name='engineer_pay_edit'),
     path('engineers/<int:pk>/pay/', run_payment, name='run_payment'),
     path('payments/', payments_list, name='payments_list'),
