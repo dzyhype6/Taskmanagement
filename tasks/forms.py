@@ -50,15 +50,20 @@ class TaskForm(forms.ModelForm):
 
 
 class EngineerPayForm(forms.ModelForm):
-    """Manager-only form to set how an engineer is paid."""
+    """Manager-only form to set how an engineer is paid AND how they receive it."""
     class Meta:
         model = User
-        fields = ['pay_type', 'monthly_salary', 'task_rate', 'hourly_rate']
+        fields = ['pay_type', 'monthly_salary', 'task_rate', 'hourly_rate',
+                  'payout_method', 'mpesa_phone', 'bank_name', 'bank_account']
         widgets = {
             'monthly_salary': forms.NumberInput(attrs={'step': '0.01', 'min': '0', 'class': 'border rounded px-3 py-2'}),
             'task_rate': forms.NumberInput(attrs={'step': '0.01', 'min': '0', 'class': 'border rounded px-3 py-2'}),
             'hourly_rate': forms.NumberInput(attrs={'step': '0.01', 'min': '0', 'class': 'border rounded px-3 py-2'}),
             'pay_type': forms.Select(attrs={'class': 'border rounded px-3 py-2'}),
+            'payout_method': forms.Select(attrs={'class': 'border rounded px-3 py-2'}),
+            'mpesa_phone': forms.TextInput(attrs={'placeholder': '07XX XXX XXX', 'class': 'border rounded px-3 py-2'}),
+            'bank_name': forms.TextInput(attrs={'placeholder': 'e.g. KCB', 'class': 'border rounded px-3 py-2'}),
+            'bank_account': forms.TextInput(attrs={'placeholder': 'Account number', 'class': 'border rounded px-3 py-2'}),
         }
 
 

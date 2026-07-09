@@ -10,11 +10,20 @@ carol (monthly). Running it again refreshes the demo cleanly.
 from datetime import timedelta
 from decimal import Decimal
 
+import random
+import string
+
 from django.core.management.base import BaseCommand
 from django.db.models import Sum
 from django.utils import timezone
 
 from tasks.models import User, Task, SubTask, TimeLog, Payment
+
+
+def _ref(method):
+    if method == 'bank':
+        return 'BNK' + ''.join(random.choices(string.digits, k=9))
+    return ''.join(random.choices(string.ascii_uppercase + string.digits, k=10))
 
 DEMO_USERS = ['amina', 'brian', 'carol']
 PW = 'demo1234'
@@ -45,7 +54,8 @@ class Command(BaseCommand):
         # ---- 1) Per-task engineer: paid per approved task, with a fine + penalty ----
         amina = User.objects.create_user(
             username='amina', password=PW, role='worker',
-            first_name='Amina', pay_type='per_task', task_rate=Decimal('1500'))
+            first_name='Amina', pay_type='per_task', task_rate=Decimal('1500'),
+            payout_method='mpesa', mpesa_phone='0712 345678')
 
         a = Task.objects.create(title='Build the login page', assigned_to=amina,
                                 status='completed', approved=True, pay_amount=Decimal('1500'))
@@ -74,14 +84,16 @@ class Command(BaseCommand):
         fine = e.abandon_fine                       # 300
         p1 = Payment.objects.create(
             engineer=amina, basis='per_task', period='Demo — this month',
-            amount=gross - fine, task_count=2, fine=fine, created_by=pm)
+            amount=gross - fine, task_count=2, fine=fine, created_by=pm,
+            method='mpesa', destination=amina.mpesa_phone, reference=_ref('mpesa'))
         Task.objects.filter(pk__in=[a.pk, b.pk]).update(payment=p1)
         Task.objects.filter(pk=e.pk).update(fine_settled=True)
 
         # ---- 2) Hourly engineer: paid for logged hours ----
         brian = User.objects.create_user(
             username='brian', password=PW, role='worker',
-            first_name='Brian', pay_type='hourly', hourly_rate=Decimal('800'))
+            first_name='Brian', pay_type='hourly', hourly_rate=Decimal('800'),
+            payout_method='mpesa', mpesa_phone='0723 456789')
         f = Task.objects.create(title='Optimise the API queries', assigned_to=brian,
                                 status='in_progress', estimated_hours=Decimal('10'))
         g = Task.objects.create(title='Fix the deployment script', assigned_to=brian,
@@ -93,25 +105,28 @@ class Command(BaseCommand):
         hours = sum((l.hours for l in paid_logs), Decimal('0'))
         p2 = Payment.objects.create(
             engineer=brian, basis='hourly', period='Demo — week 1',
-            amount=hours * brian.hourly_rate, hours=hours, created_by=pm)
+            amount=hours * brian.hourly_rate, hours=hours, created_by=pm,
+            method='mpesa', destination=brian.mpesa_phone, reference=_ref('mpesa'))
         TimeLog.objects.filter(pk__in=[l.pk for l in paid_logs]).update(payment=p2)
         TimeLog.objects.create(task=f, user=brian, hours=Decimal('2'), note='More profiling (unpaid)', work_date=today)
 
         # ---- 3) Monthly engineer: paid a salary ----
         carol = User.objects.create_user(
             username='carol', password=PW, role='worker',
-            first_name='Carol', pay_type='monthly', monthly_salary=Decimal('45000'))
+            first_name='Carol', pay_type='monthly', monthly_salary=Decimal('45000'),
+            payout_method='bank', bank_name='KCB', bank_account='1122334455')
         Task.objects.create(title='Support & maintenance', assigned_to=carol, status='in_progress')
         Payment.objects.create(engineer=carol, basis='monthly', period='Demo — this month',
-                               amount=carol.monthly_salary, created_by=pm)
+                               amount=carol.monthly_salary, created_by=pm,
+                               method='bank', destination=carol.payout_destination, reference=_ref('bank'))
 
         total_paid = Payment.objects.filter(
             engineer__in=[amina, brian, carol]).aggregate(s=Sum('amount'))['s']
 
         self.stdout.write(self.style.SUCCESS("Demo data created. Log in (password: demo1234):"))
-        self.stdout.write("  amina — per-task engineer (paid KES 2,400 net; 1 task still unpaid; 1 fine)")
-        self.stdout.write("  brian — hourly engineer (paid KES 6,000 for 7.5h; 2h unpaid)")
-        self.stdout.write("  carol — monthly engineer (paid KES 45,000 salary)")
+        self.stdout.write("  amina — per-task (paid KES 2,400 via M-Pesa 0712 345678; 1 task unpaid; 1 fine)")
+        self.stdout.write("  brian — hourly (paid KES 6,000 via M-Pesa 0723 456789; 2h unpaid)")
+        self.stdout.write("  carol — monthly (paid KES 45,000 via Bank KCB 1122334455)")
         self.stdout.write(self.style.SUCCESS(
             f"Total demo money paid out: KES {total_paid}. "
             f"Open Payments / a worker dashboard / the PM report to show it."))

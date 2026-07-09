@@ -27,6 +27,24 @@ class User(AbstractUser):
         max_digits=10, decimal_places=2, default=0,
         help_text="Pay per hour of logged time (for per-hour engineers).",
     )
+    # How the engineer receives money (simulated disbursement).
+    PAYOUT_CHOICES = (
+        ('mpesa', 'M-Pesa'),
+        ('bank', 'Bank transfer'),
+    )
+    payout_method = models.CharField(max_length=10, choices=PAYOUT_CHOICES, default='mpesa')
+    mpesa_phone = models.CharField(max_length=20, blank=True, help_text="e.g. 0712 345678")
+    bank_name = models.CharField(max_length=100, blank=True)
+    bank_account = models.CharField(max_length=40, blank=True)
+
+    @property
+    def payout_destination(self):
+        """Where a payment would be sent, given the chosen method."""
+        if self.payout_method == 'bank':
+            if self.bank_account:
+                return f"{self.bank_account}" + (f" ({self.bank_name})" if self.bank_name else "")
+            return ""
+        return self.mpesa_phone or ""
 
     def __str__(self):
         return f"{self.username} ({self.get_role_display()})"
@@ -301,6 +319,14 @@ class Payment(models.Model):
     task_count = models.PositiveIntegerField(default=0)
     hours = models.DecimalField(max_digits=8, decimal_places=2, default=0)  # for hourly payslips
     fine = models.DecimalField(max_digits=12, decimal_places=2, default=0)  # abandonment fines deducted
+    # Simulated disbursement: how/where the money was sent, and a mock ref code.
+    method = models.CharField(max_length=10, blank=True)        # mpesa | bank
+    destination = models.CharField(max_length=120, blank=True)  # phone or account
+    reference = models.CharField(max_length=40, blank=True)     # mock transaction code
+
+    @property
+    def method_label(self):
+        return {'mpesa': 'M-Pesa', 'bank': 'Bank transfer'}.get(self.method, self.method or '—')
     note = models.CharField(max_length=255, blank=True)
     created_by = models.ForeignKey(
         User, on_delete=models.SET_NULL, null=True, related_name='payments_made',
