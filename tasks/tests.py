@@ -15,10 +15,10 @@ class PaymentFlowTests(TestCase):
             username='pm', password='pass12345', role='manager')
         self.casual = User.objects.create_user(
             username='casual', password='pass12345', role='worker',
-            pay_type='per_task', task_rate=Decimal('500'))
+            pay_type='per_task', task_rate=Decimal('500'), mpesa_phone='0700000001')
         self.salaried = User.objects.create_user(
             username='salaried', password='pass12345', role='worker',
-            pay_type='monthly', monthly_salary=Decimal('30000'))
+            pay_type='monthly', monthly_salary=Decimal('30000'), mpesa_phone='0700000002')
         self.client.login(username='pm', password='pass12345')
 
     # --- task creation fills per-task pay from the engineer's rate ---
@@ -310,7 +310,8 @@ class TimeTrackingTests(TestCase):
         self.TimeLog = TimeLog
         self.pm = User.objects.create_user(username='pm', password='pw', role='manager')
         self.eng = User.objects.create_user(username='eng', password='pw', role='worker',
-                                             pay_type='hourly', hourly_rate=Decimal('20'))
+                                             pay_type='hourly', hourly_rate=Decimal('20'),
+                                             mpesa_phone='0700000003')
         self.task = Task.objects.create(title='t', assigned_to=self.eng, status='in_progress',
                                         estimated_hours=Decimal('10'))
 
@@ -366,7 +367,8 @@ class LatePenaltyTests(TestCase):
     def setUp(self):
         self.pm = User.objects.create_user(username='pm', password='pw', role='manager')
         self.eng = User.objects.create_user(username='eng', password='pw', role='worker',
-                                             pay_type='per_task', task_rate=Decimal('1000'))
+                                             pay_type='per_task', task_rate=Decimal('1000'),
+                                             mpesa_phone='0700000004')
 
     def _completed_task(self, late, penalty=20):
         from datetime import timedelta
@@ -415,7 +417,8 @@ class AbandonmentFineTests(TestCase):
         self.timedelta = timedelta
         self.pm = User.objects.create_user(username='pm', password='pw', role='manager')
         self.eng = User.objects.create_user(username='eng', password='pw', role='worker',
-                                             pay_type='per_task', task_rate=Decimal('1000'))
+                                             pay_type='per_task', task_rate=Decimal('1000'),
+                                             mpesa_phone='0700000004')
 
     def _overdue_incomplete(self, penalty=30):
         return Task.objects.create(
@@ -480,6 +483,43 @@ class DeadlineTimeTests(TestCase):
                                    due_date=today, due_time=dtime(23, 59))
         self.assertTrue(early.is_overdue)
         self.assertFalse(late.is_overdue)
+
+
+class PayoutMethodTests(TestCase):
+    def setUp(self):
+        self.pm = User.objects.create_user(username='pm', password='pw', role='manager')
+        self.client.login(username='pm', password='pw')
+
+    def test_mpesa_payment_records_channel_and_ref(self):
+        from tasks.models import Payment
+        eng = User.objects.create_user(username='m', password='pw', role='worker',
+                                       pay_type='monthly', monthly_salary=Decimal('30000'),
+                                       payout_method='mpesa', mpesa_phone='0712345678')
+        self.client.post(reverse('run_payment', args=[eng.pk]))
+        pay = Payment.objects.get(engineer=eng)
+        self.assertEqual(pay.method, 'mpesa')
+        self.assertEqual(pay.destination, '0712345678')
+        self.assertEqual(len(pay.reference), 10)     # M-Pesa-style code
+
+    def test_bank_payment_records_account(self):
+        from tasks.models import Payment
+        eng = User.objects.create_user(username='bk', password='pw', role='worker',
+                                       pay_type='monthly', monthly_salary=Decimal('30000'),
+                                       payout_method='bank', bank_name='KCB', bank_account='998877')
+        self.client.post(reverse('run_payment', args=[eng.pk]))
+        pay = Payment.objects.get(engineer=eng)
+        self.assertEqual(pay.method, 'bank')
+        self.assertIn('998877', pay.destination)
+        self.assertIn('KCB', pay.destination)
+        self.assertTrue(pay.reference.startswith('BNK'))
+
+    def test_payment_blocked_without_destination(self):
+        from tasks.models import Payment
+        eng = User.objects.create_user(username='nd', password='pw', role='worker',
+                                       pay_type='monthly', monthly_salary=Decimal('30000'),
+                                       payout_method='mpesa')  # no phone set
+        self.client.post(reverse('run_payment', args=[eng.pk]))
+        self.assertFalse(Payment.objects.filter(engineer=eng).exists())
 
 
 class ReportCategoryTests(TestCase):

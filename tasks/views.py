@@ -33,6 +33,15 @@ def _is_manager(user):
     return user.is_superuser or user.role == 'manager'
 
 
+def _mock_reference(method):
+    """A fake transaction code for a simulated disbursement (M-Pesa-style code
+    or a bank reference)."""
+    import random, string
+    if method == 'bank':
+        return 'BNK' + ''.join(random.choices(string.digits, k=9))
+    return ''.join(random.choices(string.ascii_uppercase + string.digits, k=10))
+
+
 def _default_task_pay(task):
     """For a per-task engineer, fall back to their standing rate when a task
     was created without an explicit amount. Never lowers an amount already set."""
@@ -607,13 +616,23 @@ def run_payment(request, pk):
             basis, extra = 'monthly', {}
             paid_msg = "monthly salary"
 
+        # Where the money is "sent" (simulated M-Pesa / bank disbursement).
+        destination = engineer.payout_destination
+        if not destination:
+            where = "M-Pesa number" if engineer.payout_method == 'mpesa' else "bank account"
+            messages.error(request, f"Set {engineer.username}'s {where} before paying (Engineer → pay settings).")
+            return redirect('engineer_detail', pk=engineer.pk)
+        reference = _mock_reference(engineer.payout_method)
+
         # Apply the fine (never let a payslip go negative).
         amount = gross - fines
         if amount < 0:
             amount = Decimal('0.00')
         payment = Payment.objects.create(
             engineer=engineer, basis=basis, period=period,
-            amount=amount, fine=fines, created_by=request.user, **extra,
+            amount=amount, fine=fines, created_by=request.user,
+            method=engineer.payout_method, destination=destination, reference=reference,
+            **extra,
         )
         if basis == 'per_task':
             Task.objects.filter(pk__in=[t.pk for t in unpaid]).update(payment=payment)
@@ -621,8 +640,9 @@ def run_payment(request, pk):
             TimeLog.objects.filter(pk__in=[l.pk for l in logs]).update(payment=payment)
         if fine_tasks:
             Task.objects.filter(pk__in=[t.pk for t in fine_tasks]).update(fine_settled=True)
-        msg = f"Paid {engineer.username} KES {amount} {paid_msg}" + (
-            f" (after KES {fines} in late/abandonment fines)." if fines else ".")
+        msg = (f"Paid {engineer.username} KES {amount} {paid_msg}"
+               + (f" (after KES {fines} in fines)" if fines else "")
+               + f" via {payment.method_label} to {destination} · Ref {reference}.")
 
     link = reverse('payment_detail', args=[payment.pk])
     notify(engineer, f'A payment of KES {payment.amount} was recorded for you.', link)
