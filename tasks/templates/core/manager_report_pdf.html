@@ -20,8 +20,8 @@
 </head>
 <body>
   <h1>CodeForge Engineering — Progress &amp; Payment Report</h1>
-  <p class="meta">Generated: {{ generated_at|date:"M d, Y H:i" }}
-    {% if start or end %} · Window: {{ start|default:"…" }} → {{ end|default:"…" }}{% endif %}</p>
+  <p class="meta"><strong>{{ period_label }}</strong></p>
+  <p class="meta">Generated: {{ generated_at|date:"M d, Y H:i" }}</p>
 
   <h2>Summary</h2>
   <table class="cards">

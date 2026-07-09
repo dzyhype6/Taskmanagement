@@ -4,22 +4,30 @@
     <div class="flex items-center justify-between mb-2">
         <h1 class="text-2xl font-bold text-blue-800">Progress &amp; Payment Report</h1>
         <div class="flex gap-2 no-print">
-            <a href="{% url 'manager_report' %}?format=pdf{% if start %}&start={{ start }}{% endif %}{% if end %}&end={{ end }}{% endif %}"
+            <a href="{% url 'manager_report' %}?format=pdf{% if period %}&period={{ period }}{% endif %}{% if start %}&start={{ start }}{% endif %}{% if end %}&end={{ end }}{% endif %}"
                class="bg-blue-800 text-white px-3 py-2 rounded hover:bg-blue-900 transition">🖨 Download PDF</a>
         </div>
     </div>
-    <p class="text-sm text-gray-500 mb-6">Generated {{ generated_at|date:"M d, Y H:i" }} — live snapshot, produced on request.</p>
+    <p class="text-sm text-gray-500 mb-1">Generated {{ generated_at|date:"M d, Y H:i" }} — live snapshot, produced on request.</p>
+    <p class="text-lg font-semibold text-blue-800 mb-4">{{ period_label }}</p>
+
+    <!-- Report category presets -->
+    <div class="flex flex-wrap gap-2 mb-4 no-print">
+        <a href="{% url 'manager_report' %}?period=daily" class="px-3 py-2 rounded text-sm {% if period == 'daily' %}bg-blue-800 text-white{% else %}bg-white border border-blue-800 text-blue-800 hover:bg-blue-50{% endif %}">Daily (today)</a>
+        <a href="{% url 'manager_report' %}?period=weekly" class="px-3 py-2 rounded text-sm {% if period == 'weekly' %}bg-blue-800 text-white{% else %}bg-white border border-blue-800 text-blue-800 hover:bg-blue-50{% endif %}">Weekly (this week)</a>
+        <a href="{% url 'manager_report' %}" class="px-3 py-2 rounded text-sm {% if not period and not start and not end %}bg-blue-800 text-white{% else %}bg-white border border-gray-300 text-gray-600 hover:bg-gray-50{% endif %}">All time</a>
+    </div>
 
     <form method="get" class="mb-6 flex flex-wrap items-end gap-3 no-print">
         <div>
-            <label class="block text-sm font-medium text-gray-700">From (task created)</label>
+            <label class="block text-sm font-medium text-gray-700">Custom from (task created)</label>
             <input type="date" name="start" value="{{ start }}" class="border rounded px-3 py-2">
         </div>
         <div>
             <label class="block text-sm font-medium text-gray-700">To</label>
             <input type="date" name="end" value="{{ end }}" class="border rounded px-3 py-2">
         </div>
-        <button type="submit" class="bg-blue-800 text-white px-4 py-2 rounded">Apply</button>
+        <button type="submit" class="bg-blue-800 text-white px-4 py-2 rounded">Apply custom range</button>
         <a href="{% url 'manager_report' %}" class="text-gray-600 hover:underline">Clear</a>
     </form>
 

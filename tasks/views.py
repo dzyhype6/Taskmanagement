@@ -733,10 +733,26 @@ def _build_manager_report(request):
     """Assemble the on-demand progress + payment report for the PM.
 
     Computed live from current task/payment state each time it is requested —
-    there is no schedule. Optional date window filters on task creation date.
+    there is no schedule. Can be categorised as a Daily or Weekly report, or a
+    custom date window; filters on task creation date.
     """
+    from datetime import timedelta
     start = (request.GET.get('start') or '').strip()
     end = (request.GET.get('end') or '').strip()
+    period = (request.GET.get('period') or '').strip()   # 'daily' | 'weekly' | ''
+    today = timezone.localdate()
+
+    if period == 'daily':
+        start = end = today.isoformat()
+        period_label = f"Daily report · {today:%A, %d %b %Y}"
+    elif period == 'weekly':
+        week_start = today - timedelta(days=today.weekday())   # Monday
+        start, end = week_start.isoformat(), today.isoformat()
+        period_label = f"Weekly report · {week_start:%d %b} – {today:%d %b %Y}"
+    elif start or end:
+        period_label = f"Custom · {start or '…'} → {end or '…'}"
+    else:
+        period_label = "All time"
 
     tasks_qs = Task.objects.all()
     if start:
@@ -793,6 +809,8 @@ def _build_manager_report(request):
         'generated_at': timezone.now(),
         'start': start,
         'end': end,
+        'period': period,
+        'period_label': period_label,
         'rows': rows,
         'total_tasks': total_tasks,
         'total_completed': total_completed,
