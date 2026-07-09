@@ -319,14 +319,28 @@ class Payment(models.Model):
     task_count = models.PositiveIntegerField(default=0)
     hours = models.DecimalField(max_digits=8, decimal_places=2, default=0)  # for hourly payslips
     fine = models.DecimalField(max_digits=12, decimal_places=2, default=0)  # abandonment fines deducted
-    # Simulated disbursement: how/where the money was sent, and a mock ref code.
+    # Disbursement: how/where the money was sent, and the transaction code.
     method = models.CharField(max_length=10, blank=True)        # mpesa | bank
     destination = models.CharField(max_length=120, blank=True)  # phone or account
-    reference = models.CharField(max_length=40, blank=True)     # mock transaction code
+    reference = models.CharField(max_length=40, blank=True)     # M-Pesa/bank transaction code
+    # simulated = mock code, no real money · pending = real B2C accepted, awaiting
+    # Safaricom's result · sent = confirmed by Safaricom · failed = B2C failed.
+    STATUS_CHOICES = (
+        ('simulated', 'Simulated'),
+        ('pending', 'Pending'),
+        ('sent', 'Sent'),
+        ('failed', 'Failed'),
+    )
+    status = models.CharField(max_length=10, default='simulated')
+    provider_ref = models.CharField(max_length=64, blank=True)  # Daraja ConversationID
 
     @property
     def method_label(self):
         return {'mpesa': 'M-Pesa', 'bank': 'Bank transfer'}.get(self.method, self.method or '—')
+
+    @property
+    def status_label(self):
+        return dict(self.STATUS_CHOICES).get(self.status, self.status)
     note = models.CharField(max_length=255, blank=True)
     created_by = models.ForeignKey(
         User, on_delete=models.SET_NULL, null=True, related_name='payments_made',

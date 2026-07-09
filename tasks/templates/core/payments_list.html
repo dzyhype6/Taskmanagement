@@ -36,7 +36,9 @@
                     <td class="px-4 py-2 text-sm text-gray-700">{{ p.period|default:"—" }}</td>
                     <td class="px-4 py-2 text-sm text-gray-700">{% if p.basis == 'per_task' %}{{ p.task_count }}{% elif p.basis == 'hourly' %}{{ p.hours }}h{% else %}—{% endif %}</td>
                     <td class="px-4 py-2 text-sm font-bold text-green-700">KES {{ p.amount }}</td>
-                    <td class="px-4 py-2 text-sm text-gray-700">{% if p.reference %}{{ p.method_label }} · {{ p.destination }}<div class="text-xs text-gray-400 font-mono">{{ p.reference }}</div>{% else %}—{% endif %}</td>
+                    <td class="px-4 py-2 text-sm text-gray-700">{% if p.method %}{{ p.method_label }} · {{ p.destination }}
+                        {% if p.status == 'sent' %}<span class="ml-1 text-xs text-green-700">✓ sent</span>{% elif p.status == 'pending' %}<span class="ml-1 text-xs text-amber-700">pending</span>{% elif p.status == 'failed' %}<span class="ml-1 text-xs text-red-700">failed</span>{% else %}<span class="ml-1 text-xs text-gray-400">simulated</span>{% endif %}
+                        {% if p.reference %}<div class="text-xs text-gray-400 font-mono">{{ p.reference }}</div>{% endif %}{% else %}—{% endif %}</td>
                     <td class="px-4 py-2 text-sm text-gray-500">{{ p.created_at|date:"M d, Y" }}</td>
                     <td class="px-4 py-2 text-sm"><a href="{% url 'payment_detail' p.pk %}" class="text-blue-600 hover:underline">View</a></td>
                 </tr>

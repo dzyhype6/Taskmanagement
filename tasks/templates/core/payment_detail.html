@@ -19,13 +19,19 @@
             <div><span class="font-semibold text-gray-700">Recorded by:</span> {{ payment.created_by.username|default:"—" }}</div>
         </div>
 
-        {% if payment.reference %}
+        {% if payment.method %}
         <div class="mb-5 p-3 rounded border {% if payment.method == 'mpesa' %}bg-green-50 border-green-200{% else %}bg-blue-50 border-blue-200{% endif %}">
             <div class="text-sm">
                 <span class="font-semibold text-gray-700">Sent via {{ payment.method_label }}</span>
                 to <span class="font-semibold">{{ payment.destination }}</span>
+                {% if payment.status == 'sent' %}<span class="ml-1 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-800">Confirmed ✓</span>
+                {% elif payment.status == 'pending' %}<span class="ml-1 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800">Pending confirmation</span>
+                {% elif payment.status == 'failed' %}<span class="ml-1 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-800">Failed</span>
+                {% else %}<span class="ml-1 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-200 text-gray-700">Simulated</span>{% endif %}
             </div>
-            <div class="text-xs text-gray-500 mt-1">Transaction ref: <span class="font-mono">{{ payment.reference }}</span> · {{ payment.created_at|date:"M d, Y H:i" }} <span class="italic">(simulated)</span></div>
+            <div class="text-xs text-gray-500 mt-1">
+                {% if payment.reference %}Transaction ref: <span class="font-mono">{{ payment.reference }}</span> · {% endif %}{{ payment.created_at|date:"M d, Y H:i" }}
+            </div>
         </div>
         {% endif %}
 

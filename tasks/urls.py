@@ -29,6 +29,8 @@ from .views import (
     payment_detail,
     manager_report,
     request_progress,
+    mpesa_result,
+    mpesa_timeout,
 )
 
 urlpatterns = [
@@ -81,6 +83,10 @@ urlpatterns = [
     path('engineers/<int:pk>/pay/', run_payment, name='run_payment'),
     path('payments/', payments_list, name='payments_list'),
     path('payments/<int:pk>/', payment_detail, name='payment_detail'),
+
+    # M-Pesa Daraja B2C async callbacks (public; Safaricom posts here)
+    path('mpesa/b2c/result/', mpesa_result, name='mpesa_result'),
+    path('mpesa/b2c/timeout/', mpesa_timeout, name='mpesa_timeout'),
 
     # On-demand PM progress + payment report (HTML, and PDF via ?format=pdf)
     path('pm-report/', manager_report, name='manager_report'),

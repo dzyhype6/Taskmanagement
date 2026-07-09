@@ -4,7 +4,8 @@ from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.urls import reverse_lazy
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView
 from django.template.loader import render_to_string
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
+from django.views.decorators.csrf import csrf_exempt
 from django.db.models import Count
 from datetime import date
 
@@ -26,6 +27,7 @@ from .forms import (
     TaskCommentForm, TaskAttachmentForm, EngineerPayForm, TimeLogForm,
 )
 from .services import notify, notify_managers
+from . import mpesa
 from django.contrib import messages
 
 
@@ -616,22 +618,38 @@ def run_payment(request, pk):
             basis, extra = 'monthly', {}
             paid_msg = "monthly salary"
 
-        # Where the money is "sent" (simulated M-Pesa / bank disbursement).
+        # Where the money is sent.
         destination = engineer.payout_destination
         if not destination:
             where = "M-Pesa number" if engineer.payout_method == 'mpesa' else "bank account"
             messages.error(request, f"Set {engineer.username}'s {where} before paying (Engineer → pay settings).")
             return redirect('engineer_detail', pk=engineer.pk)
-        reference = _mock_reference(engineer.payout_method)
 
         # Apply the fine (never let a payslip go negative).
         amount = gross - fines
         if amount < 0:
             amount = Decimal('0.00')
+
+        # Disburse: a real Daraja B2C payout if M-Pesa is configured, else simulated.
+        pay_status, provider_ref, reference = 'simulated', '', ''
+        if engineer.payout_method == 'mpesa':
+            res = mpesa.send_b2c(destination, amount,
+                                 remarks=f"CodeForge {basis} pay", occasion=period or basis)
+            if res.get('mode') == 'live':
+                if not res.get('ok'):
+                    messages.error(request, f"M-Pesa payout could not be initiated: {res.get('error')}")
+                    return redirect('engineer_detail', pk=engineer.pk)  # rolls back the transaction
+                pay_status, provider_ref = 'pending', res.get('conversation_id', '')
+            else:
+                reference = _mock_reference('mpesa')
+        else:  # bank — no API, recorded as simulated
+            reference = _mock_reference('bank')
+
         payment = Payment.objects.create(
             engineer=engineer, basis=basis, period=period,
             amount=amount, fine=fines, created_by=request.user,
             method=engineer.payout_method, destination=destination, reference=reference,
+            status=pay_status, provider_ref=provider_ref,
             **extra,
         )
         if basis == 'per_task':
@@ -640,14 +658,49 @@ def run_payment(request, pk):
             TimeLog.objects.filter(pk__in=[l.pk for l in logs]).update(payment=payment)
         if fine_tasks:
             Task.objects.filter(pk__in=[t.pk for t in fine_tasks]).update(fine_settled=True)
-        msg = (f"Paid {engineer.username} KES {amount} {paid_msg}"
-               + (f" (after KES {fines} in fines)" if fines else "")
-               + f" via {payment.method_label} to {destination} · Ref {reference}.")
+        via = f" via {payment.method_label} to {destination}"
+        if pay_status == 'pending':
+            msg = (f"M-Pesa payout of KES {amount} to {destination} initiated — "
+                   f"awaiting Safaricom confirmation (the real code will appear on the payslip).")
+        else:
+            msg = (f"Paid {engineer.username} KES {amount} {paid_msg}"
+                   + (f" (after KES {fines} in fines)" if fines else "")
+                   + via + f" · Ref {reference} (simulated).")
 
     link = reverse('payment_detail', args=[payment.pk])
     notify(engineer, f'A payment of KES {payment.amount} was recorded for you.', link)
     messages.success(request, msg)
     return redirect('payment_detail', pk=payment.pk)
+
+
+@csrf_exempt
+def mpesa_result(request):
+    """Daraja B2C result callback — Safaricom POSTs the final outcome of a payout
+    here, including the real M-Pesa transaction code. Matched to a Payment by its
+    ConversationID. Always returns 200 so Safaricom doesn't retry forever."""
+    import json
+    try:
+        data = json.loads(request.body or b'{}')
+        result = data.get('Result', {})
+        conv = result.get('ConversationID') or result.get('OriginatorConversationID')
+        payment = Payment.objects.filter(provider_ref=conv).first() if conv else None
+        if payment:
+            if str(result.get('ResultCode')) == '0':
+                payment.status = 'sent'
+                # the real M-Pesa code is TransactionID (or in ResultParameters)
+                payment.reference = result.get('TransactionID') or payment.reference
+            else:
+                payment.status = 'failed'
+            payment.save(update_fields=['status', 'reference'])
+    except Exception:
+        pass
+    return JsonResponse({'ResultCode': 0, 'ResultDesc': 'Accepted'})
+
+
+@csrf_exempt
+def mpesa_timeout(request):
+    """Daraja B2C queue-timeout callback. Nothing to do but acknowledge."""
+    return JsonResponse({'ResultCode': 0, 'ResultDesc': 'Accepted'})
 
 
 @login_required
