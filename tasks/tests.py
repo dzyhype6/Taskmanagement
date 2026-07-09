@@ -470,6 +470,57 @@ class AbandonmentFineTests(TestCase):
         self.assertEqual(pay.amount, Decimal('0.00'))         # floored, never negative
 
 
+class LatePenaltyAnyPayTypeTests(TestCase):
+    """Late-completion penalties must also work for monthly / hourly engineers,
+    deducted from their next payslip."""
+    def setUp(self):
+        from datetime import timedelta
+        self.timedelta = timedelta
+        self.pm = User.objects.create_user(username='pm', password='pw', role='manager')
+        self.client.login(username='pm', password='pw')
+
+    def _late_completed_task(self, eng, penalty=20, pay=Decimal('1000')):
+        t = Task.objects.create(title='late', assigned_to=eng, status='in_progress',
+                                due_date=timezone.localdate() - self.timedelta(days=1),
+                                pay_amount=pay, late_penalty_percent=penalty)
+        t.status = 'completed'
+        t.save()   # completed_at = now > yesterday's deadline => late
+        return t
+
+    def test_monthly_late_completion_fined_on_salary(self):
+        from tasks.models import Payment
+        eng = User.objects.create_user(username='mon', password='pw', role='worker',
+                                       pay_type='monthly', monthly_salary=Decimal('30000'),
+                                       mpesa_phone='0700000010')
+        self._late_completed_task(eng, penalty=20)     # fine = 200
+        self.client.post(reverse('run_payment', args=[eng.pk]))
+        pay = Payment.objects.get(engineer=eng)
+        self.assertEqual(pay.fine, Decimal('200.00'))
+        self.assertEqual(pay.amount, Decimal('29800.00'))   # 30000 − 200
+
+    def test_hourly_late_completion_fined(self):
+        from tasks.models import Payment, TimeLog
+        eng = User.objects.create_user(username='hr', password='pw', role='worker',
+                                       pay_type='hourly', hourly_rate=Decimal('500'),
+                                       mpesa_phone='0700000011')
+        t = self._late_completed_task(eng, penalty=10)   # fine = 100
+        TimeLog.objects.create(task=t, user=eng, hours=Decimal('4'))  # 4h × 500 = 2000
+        self.client.post(reverse('run_payment', args=[eng.pk]))
+        pay = Payment.objects.get(engineer=eng)
+        self.assertEqual(pay.fine, Decimal('100.00'))
+        self.assertEqual(pay.amount, Decimal('1900.00'))    # 2000 − 100
+
+    def test_per_task_unchanged_no_double_charge(self):
+        # per-task engineers still lose the penalty from the task's own pay (net_pay),
+        # and it is NOT also charged as a payslip fine.
+        eng = User.objects.create_user(username='pt', password='pw', role='worker',
+                                       pay_type='per_task', task_rate=Decimal('1000'),
+                                       mpesa_phone='0700000012')
+        t = self._late_completed_task(eng, penalty=20)
+        self.assertEqual(t.late_completion_fine, Decimal('0.00'))  # not a payslip fine
+        self.assertEqual(t.net_pay, Decimal('800.00'))             # taken from its own pay
+
+
 class DeadlineTimeTests(TestCase):
     def test_overdue_uses_time_of_day(self):
         from datetime import time as dtime

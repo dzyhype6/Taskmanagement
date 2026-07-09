@@ -94,6 +94,9 @@
             {% if task.abandon_fine %}
                 <div class="mt-1 text-sm text-red-600">⚠ Overdue &amp; incomplete — abandonment fine of KES {{ task.abandon_fine }} ({{ task.late_penalty_percent }}%) will be deducted from {{ task.assigned_to.username }}'s next pay unless completed.</div>
             {% endif %}
+            {% if task.late_completion_fine %}
+                <div class="mt-1 text-sm text-red-600">⚠ Completed late — a fine of KES {{ task.late_completion_fine }} ({{ task.late_penalty_percent }}%) will be deducted from {{ task.assigned_to.username }}'s next pay.</div>
+            {% endif %}
         </div>
         {% endif %}
 
@@ -124,7 +127,7 @@
                         <a href="{% url 'task_update' task.pk %}" class="bg-yellow-600 text-white px-4 py-2 rounded hover:bg-yellow-700 transition">Edit</a>
                         <a href="{% url 'task_delete' task.pk %}" class="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 transition">Delete</a>
                     {% endif %}
-                {% elif user.role == 'worker' and task.assigned_to == user %}
+                {% elif user.role == 'worker' and task.assigned_to == user and task.status != 'completed' %}
                     <a href="{% url 'worker_task_update' task.pk %}" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition">Update Status</a>
                 {% endif %}
             {% endif %}

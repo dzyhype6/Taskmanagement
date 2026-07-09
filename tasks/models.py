@@ -204,6 +204,23 @@ class Task(models.Model):
         return Decimal('0.00')
 
     @property
+    def late_completion_fine(self):
+        """KES fined for completing this task late, for engineers who are NOT
+        paid per task (monthly/hourly) — per-task engineers already lose it from
+        the task's own pay via net_pay. Charged on the next payslip, once."""
+        from decimal import Decimal
+        if (self.was_late and self.late_penalty_percent and not self.fine_settled
+                and self.assigned_to.pay_type != 'per_task'):
+            return self._penalty()
+        return Decimal('0.00')
+
+    @property
+    def payslip_fine(self):
+        """Total deduction this task adds to the engineer's next payslip:
+        abandoning it while overdue, or completing it late (non-per-task)."""
+        return self.abandon_fine + self.late_completion_fine
+
+    @property
     def is_paid(self):
         return self.payment_id is not None
 
