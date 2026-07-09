@@ -522,6 +522,58 @@ class PayoutMethodTests(TestCase):
         self.assertFalse(Payment.objects.filter(engineer=eng).exists())
 
 
+class MpesaDarajaTests(TestCase):
+    def test_normalise_phone(self):
+        from tasks import mpesa
+        self.assertEqual(mpesa.normalise_phone('0712345678'), '254712345678')
+        self.assertEqual(mpesa.normalise_phone('712345678'), '254712345678')
+        self.assertEqual(mpesa.normalise_phone('+254712345678'), '254712345678')
+
+    def test_disabled_by_default_is_simulated(self):
+        from tasks import mpesa
+        self.assertFalse(mpesa.enabled())                 # no creds in tests
+        self.assertEqual(mpesa.send_b2c('0712345678', 100), {'mode': 'simulated'})
+
+    def test_payment_is_simulated_without_credentials(self):
+        from tasks.models import Payment
+        pm = User.objects.create_user(username='pm', password='pw', role='manager')
+        eng = User.objects.create_user(username='m', password='pw', role='worker',
+                                       pay_type='monthly', monthly_salary=Decimal('30000'),
+                                       mpesa_phone='0712345678')
+        self.client.login(username='pm', password='pw')
+        self.client.post(reverse('run_payment', args=[eng.pk]))
+        pay = Payment.objects.get(engineer=eng)
+        self.assertEqual(pay.status, 'simulated')
+        self.assertEqual(len(pay.reference), 10)
+
+    def test_b2c_result_callback_confirms_payment(self):
+        import json
+        from tasks.models import Payment
+        eng = User.objects.create_user(username='m', password='pw', role='worker')
+        pay = Payment.objects.create(engineer=eng, basis='monthly', amount=Decimal('100'),
+                                     method='mpesa', destination='254712345678',
+                                     status='pending', provider_ref='AG_CONV_123')
+        body = json.dumps({'Result': {'ResultCode': 0, 'ConversationID': 'AG_CONV_123',
+                                       'TransactionID': 'REAL123CODE'}})
+        resp = self.client.post(reverse('mpesa_result'), body, content_type='application/json')
+        self.assertEqual(resp.status_code, 200)
+        pay.refresh_from_db()
+        self.assertEqual(pay.status, 'sent')
+        self.assertEqual(pay.reference, 'REAL123CODE')
+
+    def test_b2c_result_callback_marks_failure(self):
+        import json
+        from tasks.models import Payment
+        eng = User.objects.create_user(username='m', password='pw', role='worker')
+        pay = Payment.objects.create(engineer=eng, basis='monthly', amount=Decimal('100'),
+                                     method='mpesa', status='pending', provider_ref='AG_X')
+        body = json.dumps({'Result': {'ResultCode': 2001, 'ConversationID': 'AG_X',
+                                       'ResultDesc': 'insufficient funds'}})
+        self.client.post(reverse('mpesa_result'), body, content_type='application/json')
+        pay.refresh_from_db()
+        self.assertEqual(pay.status, 'failed')
+
+
 class ReportCategoryTests(TestCase):
     def setUp(self):
         self.pm = User.objects.create_user(username='pm', password='pw', role='manager')

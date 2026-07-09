@@ -162,3 +162,19 @@ try:
         DEFAULT_FROM_EMAIL = f'CodeForge Engineering <{EMAIL_HOST_USER}>'
 except Exception:
     pass
+
+# --- M-Pesa (Safaricom Daraja B2C) — OPTIONAL ---
+# Leave blank to keep payouts SIMULATED. Fill these (ideally via mpesa_config.py,
+# kept out of git) to make real payouts. See mpesa_config.example.py.
+MPESA_ENV = 'sandbox'            # 'sandbox' or 'production'
+MPESA_CONSUMER_KEY = ''
+MPESA_CONSUMER_SECRET = ''
+MPESA_SHORTCODE = ''             # your B2C shortcode (PartyA)
+MPESA_INITIATOR_NAME = ''
+MPESA_SECURITY_CREDENTIAL = ''   # initiator password, encrypted with Safaricom's cert
+MPESA_RESULT_URL = ''            # public https URL -> /mpesa/b2c/result/
+MPESA_TIMEOUT_URL = ''           # public https URL -> /mpesa/b2c/timeout/
+try:
+    from .mpesa_config import *  # noqa: F401,F403
+except Exception:
+    pass
