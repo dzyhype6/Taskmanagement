@@ -25,3 +25,5 @@ lp2.mjs
 
 # SQLite database (recreated with migrate; keeps pulls from breaking)
 db.sqlite3
+ap.mjs
+ap_*.png

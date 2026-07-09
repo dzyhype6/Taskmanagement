@@ -625,6 +625,43 @@ class MpesaDarajaTests(TestCase):
         self.assertEqual(pay.status, 'failed')
 
 
+class ApprovalsTests(TestCase):
+    def setUp(self):
+        self.pm = User.objects.create_user(username='pm', password='pw', role='manager')
+        self.a = User.objects.create_user(username='a', password='pw', role='worker')
+        self.b = User.objects.create_user(username='b', password='pw', role='worker')
+        self.client.login(username='pm', password='pw')
+
+    def test_lists_only_completed_unapproved(self):
+        Task.objects.create(title='done1', assigned_to=self.a, status='completed')
+        Task.objects.create(title='done2', assigned_to=self.b, status='completed')
+        Task.objects.create(title='approved', assigned_to=self.a, status='completed', approved=True)
+        Task.objects.create(title='inprog', assigned_to=self.a, status='in_progress')
+        resp = self.client.get(reverse('approvals'))
+        titles = [t.title for t in resp.context['tasks']]
+        self.assertCountEqual(titles, ['done1', 'done2'])
+
+    def test_approve_all(self):
+        Task.objects.create(title='d1', assigned_to=self.a, status='completed')
+        Task.objects.create(title='d2', assigned_to=self.b, status='completed')
+        self.client.post(reverse('approve_all'))
+        self.assertEqual(Task.objects.filter(approved=True).count(), 2)
+
+    def test_approve_all_for_one_worker(self):
+        Task.objects.create(title='d1', assigned_to=self.a, status='completed')
+        Task.objects.create(title='d2', assigned_to=self.b, status='completed')
+        self.client.post(reverse('approve_all'), {'worker': self.a.id})
+        self.assertTrue(Task.objects.get(title='d1').approved)
+        self.assertFalse(Task.objects.get(title='d2').approved)
+
+    def test_worker_cannot_access(self):
+        self.client.logout(); self.client.login(username='a', password='pw')
+        self.assertEqual(self.client.get(reverse('approvals')).status_code, 302)
+        Task.objects.create(title='d1', assigned_to=self.a, status='completed')
+        self.client.post(reverse('approve_all'))
+        self.assertEqual(Task.objects.filter(approved=True).count(), 0)
+
+
 class ReportCategoryTests(TestCase):
     def setUp(self):
         self.pm = User.objects.create_user(username='pm', password='pw', role='manager')

@@ -534,6 +534,40 @@ def task_approve(request, pk):
 
 
 @login_required
+def approvals(request):
+    """One place to approve completed work across ALL workers."""
+    if not _is_manager(request.user):
+        return redirect('worker_dashboard')
+    tasks = (Task.objects.filter(status='completed', approved=False)
+             .select_related('assigned_to')
+             .order_by('assigned_to__username', '-completed_at'))
+    return render(request, 'core/approvals.html', {'tasks': tasks})
+
+
+@login_required
+def approve_all(request):
+    """Approve every completed, unapproved task (optionally for one worker)."""
+    if not _is_manager(request.user):
+        return redirect('worker_dashboard')
+    if request.method == 'POST':
+        qs = Task.objects.filter(status='completed', approved=False)
+        worker_id = request.POST.get('worker')
+        if worker_id:
+            qs = qs.filter(assigned_to_id=worker_id)
+        count = 0
+        for task in qs:
+            task.approved = True
+            task.approved_at = timezone.now()
+            task.save(update_fields=['approved', 'approved_at'])
+            notify(task.assigned_to, f'Your task "{task.title}" was approved for payment.',
+                   reverse('task_detail', args=[task.pk]))
+            count += 1
+        messages.success(request, f"Approved {count} task(s) for payment." if count
+                         else "No completed tasks were waiting for approval.")
+    return redirect('approvals')
+
+
+@login_required
 def engineer_pay_edit(request, pk):
     """Manager sets how an engineer is paid (monthly salary or per-task rate)."""
     if not _is_manager(request.user):
