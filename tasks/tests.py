@@ -656,6 +656,12 @@ class ReportCategoryTests(TestCase):
         self.assertEqual(resp['Content-Type'], 'application/pdf')
         self.assertEqual(resp.content[:4], b'%PDF')
 
+    def test_old_reports_pdf_downloads_via_xhtml2pdf(self):
+        # the legacy /reports/ PDF must work without WeasyPrint (Windows-friendly)
+        resp = self.client.get(reverse('reports'), {'format': 'pdf'})
+        self.assertEqual(resp['Content-Type'], 'application/pdf')
+        self.assertEqual(resp.content[:4], b'%PDF')
+
 
 class TaskOverdueTests(TestCase):
     def test_is_overdue(self):

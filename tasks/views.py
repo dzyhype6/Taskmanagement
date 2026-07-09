@@ -9,13 +9,6 @@ from django.views.decorators.csrf import csrf_exempt
 from django.db.models import Count
 from datetime import date
 
-try:
-    from weasyprint import HTML, CSS
-except Exception:  # pragma: no cover
-    HTML = None
-    CSS = None
-
-
 from django.urls import reverse
 from django.db import transaction
 from django.db.models import Q, Sum, Avg
@@ -778,23 +771,22 @@ def reports_view(request):
         'report_user': user,
     }
 
-    # If user requested PDF download: ?format=pdf
-    if request.GET.get('format') == 'pdf' and HTML is not None:
-        # Render a printable HTML version
+    # If user requested PDF download: ?format=pdf (xhtml2pdf — Windows-friendly)
+    if request.GET.get('format') == 'pdf':
+        try:
+            from xhtml2pdf import pisa
+            from io import BytesIO
+        except Exception:
+            messages.error(request, "PDF support (xhtml2pdf) is not installed on the server.")
+            return redirect('reports')
         html_string = render_to_string('core/report_pdf.html', context, request=request)
-        html = HTML(string=html_string, base_url=request.build_absolute_uri('/'))
-        css = CSS(string='''
-            @page { size: A4; margin: 1cm; }
-            body { font-family: "Helvetica", Arial, sans-serif; font-size: 12px; }
-            h1, h2 { color: #0b5cff; }
-            table { width: 100%; border-collapse: collapse; margin-top: 0.5rem; }
-            th, td { padding: 6px 8px; border: 1px solid #ddd; }
-            th { background: #f0f8ff; }
-        ''')
-        pdf_bytes = html.write_pdf(stylesheets=[css])
-
+        buf = BytesIO()
+        result = pisa.CreatePDF(src=html_string, dest=buf, encoding='utf-8')
+        if result.err:
+            messages.error(request, "Could not generate the PDF report.")
+            return redirect('reports')
         filename = f"report-{user.username}-{date.today().isoformat()}.pdf"
-        response = HttpResponse(pdf_bytes, content_type='application/pdf')
+        response = HttpResponse(buf.getvalue(), content_type='application/pdf')
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
         return response
 
