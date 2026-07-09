@@ -482,6 +482,38 @@ class DeadlineTimeTests(TestCase):
         self.assertFalse(late.is_overdue)
 
 
+class ReportCategoryTests(TestCase):
+    def setUp(self):
+        self.pm = User.objects.create_user(username='pm', password='pw', role='manager')
+        self.eng = User.objects.create_user(username='eng', password='pw', role='worker')
+        self.client.login(username='pm', password='pw')
+
+    def test_daily_report_window_is_today(self):
+        resp = self.client.get(reverse('manager_report'), {'period': 'daily'})
+        today = timezone.localdate().isoformat()
+        self.assertEqual(resp.context['start'], today)
+        self.assertEqual(resp.context['end'], today)
+        self.assertIn('Daily report', resp.context['period_label'])
+
+    def test_weekly_report_window_is_this_week(self):
+        from datetime import timedelta
+        resp = self.client.get(reverse('manager_report'), {'period': 'weekly'})
+        today = timezone.localdate()
+        monday = today - timedelta(days=today.weekday())
+        self.assertEqual(resp.context['start'], monday.isoformat())
+        self.assertEqual(resp.context['end'], today.isoformat())
+        self.assertIn('Weekly report', resp.context['period_label'])
+
+    def test_all_time_default(self):
+        resp = self.client.get(reverse('manager_report'))
+        self.assertEqual(resp.context['period_label'], 'All time')
+
+    def test_daily_pdf_downloads(self):
+        resp = self.client.get(reverse('manager_report'), {'period': 'daily', 'format': 'pdf'})
+        self.assertEqual(resp['Content-Type'], 'application/pdf')
+        self.assertEqual(resp.content[:4], b'%PDF')
+
+
 class TaskOverdueTests(TestCase):
     def test_is_overdue(self):
         eng = User.objects.create_user(username='e', password='p', role='worker')
