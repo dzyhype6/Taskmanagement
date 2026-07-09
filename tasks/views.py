@@ -573,15 +573,15 @@ def run_payment(request, pk):
     period = (request.POST.get('period') or '').strip()
 
     with transaction.atomic():
-        # Abandonment fines: tasks left incomplete past their deadline are fined
-        # (deducted from whatever this payslip pays). Assessed once, then settled.
+        # Penalty fines deducted from this payslip: a task abandoned while
+        # overdue, or (for monthly/hourly engineers) one completed late.
+        # Assessed once per task, then settled so it's never charged twice.
         fine_tasks = [
             t for t in Task.objects.select_for_update().filter(
-                assigned_to=engineer, fine_settled=False, late_penalty_percent__gt=0
-            ).exclude(status='completed')
-            if t.is_overdue
+                assigned_to=engineer, fine_settled=False, late_penalty_percent__gt=0)
+            if t.payslip_fine > 0
         ]
-        fines = sum((t.abandon_fine for t in fine_tasks), Decimal('0'))
+        fines = sum((t.payslip_fine for t in fine_tasks), Decimal('0'))
 
         if engineer.pay_type == 'per_task':
             unpaid = list(

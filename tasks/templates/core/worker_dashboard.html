@@ -76,7 +76,7 @@
                         </td>
                         <td class="px-4 py-3 align-middle text-sm">
                             <a href="{% url 'task_detail' task.pk %}" class="text-blue-600 hover:underline">View</a>
-                            {% if task.assigned_to == user %}
+                            {% if task.assigned_to == user and task.status != 'completed' %}
                                 <a href="{% url 'worker_task_update' task.pk %}" class="ml-3 inline-flex items-center px-2 py-1 rounded text-green-600 hover:underline">Update Status</a>
                             {% endif %}
                         </td>
