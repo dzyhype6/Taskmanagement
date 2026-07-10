@@ -573,6 +573,29 @@ class PayoutMethodTests(TestCase):
         self.assertFalse(Payment.objects.filter(engineer=eng).exists())
 
 
+class MpesaCheckCommandTests(TestCase):
+    def test_reports_simulated_when_unconfigured(self):
+        from io import StringIO
+        from django.core.management import call_command
+        out = StringIO()
+        call_command('mpesa_check', stdout=out)
+        text = out.getvalue()
+        self.assertIn('SIMULATED', text)
+        self.assertIn('MPESA_CONSUMER_KEY', text)   # lists what's missing
+
+    def test_payments_page_shows_mpesa_mode_badge(self):
+        pm = User.objects.create_user(username='pm', password='pw', role='manager')
+        self.client.login(username='pm', password='pw')
+        resp = self.client.get(reverse('payments_list'))
+        self.assertContains(resp, 'M-Pesa: simulated')
+
+    def test_workers_do_not_see_mpesa_badge(self):
+        eng = User.objects.create_user(username='w', password='pw', role='worker')
+        self.client.login(username='w', password='pw')
+        resp = self.client.get(reverse('payments_list'))
+        self.assertNotContains(resp, 'M-Pesa: simulated')
+
+
 class MpesaDarajaTests(TestCase):
     def test_normalise_phone(self):
         from tasks import mpesa

@@ -1,10 +1,23 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="max-w-5xl mx-auto my-8">
-    <div class="flex items-center justify-between mb-6">
+    <div class="flex items-center justify-between mb-2">
         <h1 class="text-2xl font-bold text-blue-800">Payments</h1>
         <div class="text-sm text-gray-600">Total recorded: <span class="font-bold text-blue-800">KES {{ total }}</span></div>
     </div>
+    {% if is_manager %}
+    <div class="mb-6 text-sm">
+        {% if mpesa_live %}
+            <span class="inline-flex items-center px-3 py-1 rounded-full font-semibold bg-green-100 text-green-800">
+                M-Pesa Daraja: CONNECTED ({{ mpesa_env }}) — payouts run against Safaricom
+            </span>
+        {% else %}
+            <span class="inline-flex items-center px-3 py-1 rounded-full font-semibold bg-gray-200 text-gray-700">
+                M-Pesa: simulated — configure Daraja credentials to go live (run: python manage.py mpesa_check)
+            </span>
+        {% endif %}
+    </div>
+    {% endif %}
 
     <div class="bg-white shadow rounded-lg overflow-x-auto">
         <table class="min-w-full divide-y divide-gray-200">
