@@ -95,7 +95,9 @@
     {% endif %}
 
     <!-- Main Content -->
-    <main class="{% if user.is_authenticated %}ml-56{% endif %} pt-24 px-8">
+    {# inline padding-top: the offline Tailwind build lacks pt-24, and the fixed
+       header is ~91px tall, so this must not rely on a utility class #}
+    <main class="{% if user.is_authenticated %}ml-56{% endif %} px-8" style="padding-top:7rem">
         {% if user.is_authenticated %}
         <div class="flex justify-end no-print mb-2">
             <div id="liveClock" class="text-sm text-gray-500 font-medium">&nbsp;</div>
