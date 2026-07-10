@@ -625,6 +625,35 @@ class MpesaDarajaTests(TestCase):
         self.assertEqual(pay.status, 'failed')
 
 
+class SuperuserDashboardTests(TestCase):
+    """Regression: a superuser created with `createsuperuser` has no role and
+    used to bounce between the two dashboards in an infinite redirect loop."""
+    def setUp(self):
+        self.su = User.objects.create_superuser(username='root', password='pw', email='')
+        self.client.login(username='root', password='pw')
+
+    def test_superuser_lands_on_manager_dashboard(self):
+        resp = self.client.get(reverse('role_redirect'), follow=True)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.request['PATH_INFO'], reverse('manager_dashboard'))
+
+    def test_manager_dashboard_renders_for_superuser(self):
+        resp = self.client.get(reverse('manager_dashboard'))
+        self.assertEqual(resp.status_code, 200)   # no redirect, no loop
+
+    def test_worker_dashboard_redirects_superuser_to_manager(self):
+        resp = self.client.get(reverse('worker_dashboard'), follow=True)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.request['PATH_INFO'], reverse('manager_dashboard'))
+
+    def test_roleless_regular_user_goes_to_not_member(self):
+        User.objects.create_user(username='norole', password='pw')  # role=''
+        self.client.logout(); self.client.login(username='norole', password='pw')
+        resp = self.client.get(reverse('manager_dashboard'), follow=True)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.request['PATH_INFO'], reverse('not_member'))
+
+
 class ApprovalsTests(TestCase):
     def setUp(self):
         self.pm = User.objects.create_user(username='pm', password='pw', role='manager')
