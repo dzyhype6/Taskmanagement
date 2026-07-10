@@ -625,6 +625,37 @@ class MpesaDarajaTests(TestCase):
         self.assertEqual(pay.status, 'failed')
 
 
+class UiCleanupTests(TestCase):
+    """Controls must not render for roles/states where they do nothing."""
+    def setUp(self):
+        self.pm = User.objects.create_user(username='pm', password='pw', role='manager')
+        self.eng = User.objects.create_user(username='eng', password='pw', role='worker')
+
+    def test_worker_filter_hidden_from_workers_on_reports(self):
+        self.client.login(username='eng', password='pw')
+        resp = self.client.get(reverse('reports'))
+        self.assertNotIn('worker', resp.context['form'].fields)
+        self.assertNotContains(resp, 'name="worker"')
+        # managers still get it
+        self.client.logout(); self.client.login(username='pm', password='pw')
+        resp = self.client.get(reverse('reports'))
+        self.assertIn('worker', resp.context['form'].fields)
+
+    def test_no_checklist_editing_on_completed_task(self):
+        t = Task.objects.create(title='t', assigned_to=self.eng, status='completed')
+        self.client.login(username='pm', password='pw')
+        resp = self.client.get(reverse('task_detail', args=[t.pk]))
+        self.assertFalse(resp.context['can_edit_subtasks'])
+
+    def test_pay_button_hidden_when_nothing_to_pay(self):
+        eng = User.objects.create_user(username='pt', password='pw', role='worker',
+                                       pay_type='per_task', task_rate=Decimal('500'))
+        self.client.login(username='pm', password='pw')
+        resp = self.client.get(reverse('engineer_detail', args=[eng.pk]))
+        self.assertNotContains(resp, 'Pay 0 approved task(s)')
+        self.assertContains(resp, 'Nothing to pay yet')
+
+
 class SuperuserDashboardTests(TestCase):
     """Regression: a superuser created with `createsuperuser` has no role and
     used to bounce between the two dashboards in an infinite redirect loop."""
