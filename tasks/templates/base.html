@@ -95,9 +95,9 @@
     {% endif %}
 
     <!-- Main Content -->
-    <main class="{% if user.is_authenticated %}ml-56{% endif %} pt-20 px-8">
+    <main class="{% if user.is_authenticated %}ml-56{% endif %} pt-24 px-8">
         {% if user.is_authenticated %}
-        <div class="flex justify-end no-print">
+        <div class="flex justify-end no-print mb-2">
             <div id="liveClock" class="text-sm text-gray-500 font-medium">&nbsp;</div>
         </div>
         <script>

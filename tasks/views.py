@@ -50,7 +50,9 @@ def _default_task_pay(task):
 @login_required
 def role_redirect(request):
     user = request.user
-    if user.role == 'manager':
+    # Superusers (e.g. created with `createsuperuser`, which sets no role)
+    # count as managers everywhere — never bounce them between dashboards.
+    if user.is_superuser or user.role == 'manager':
         return redirect('manager_dashboard')
     elif user.role == 'worker':
         return redirect('worker_dashboard')
@@ -64,8 +66,10 @@ def not_member(request):
 @login_required
 def manager_dashboard(request):
     user = request.user
-    if user.role != 'manager':
-        return redirect('worker_dashboard')
+    if not (user.is_superuser or user.role == 'manager'):
+        # a roleless non-superuser goes to not_member, NOT worker_dashboard
+        # (which would bounce them straight back here in a redirect loop)
+        return redirect('worker_dashboard' if user.role == 'worker' else 'not_member')
     # Single-organization app: managers see all tasks
     tasks = Task.objects.all()
     workers = User.objects.filter(role='worker')
@@ -124,7 +128,8 @@ def engineer_detail(request, pk):
 def worker_dashboard(request):
     user = request.user
     if user.role != 'worker':
-        return redirect('manager_dashboard')
+        # managers/superusers to their dashboard; anyone roleless to not_member
+        return redirect('manager_dashboard' if (user.is_superuser or user.role == 'manager') else 'not_member')
     tasks = Task.objects.filter(assigned_to=user)
     completed = tasks.filter(status='completed').select_related('payment').order_by('-completed_at')
     # What the engineer has actually been paid so far (their per-task payslips
