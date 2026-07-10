@@ -745,8 +745,11 @@ def payments_list(request):
     else:
         payments = Payment.objects.select_related('created_by').filter(engineer=request.user)
     total = payments.aggregate(s=Sum('amount'))['s'] or Decimal('0')
+    from django.conf import settings
     return render(request, 'core/payments_list.html', {
         'payments': payments, 'total': total, 'is_manager': _is_manager(request.user),
+        'mpesa_live': mpesa.enabled(),
+        'mpesa_env': getattr(settings, 'MPESA_ENV', 'sandbox') or 'sandbox',
     })
 
 
