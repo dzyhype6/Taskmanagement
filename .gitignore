@@ -27,3 +27,5 @@ lp2.mjs
 db.sqlite3
 ap.mjs
 ap_*.png
+vf*.mjs
+vf_*.png
