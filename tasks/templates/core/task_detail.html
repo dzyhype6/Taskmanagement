@@ -176,7 +176,8 @@
         {% endif %}
     </div>
 
-    <!-- Checklist / subtasks -->
+    <!-- Checklist / subtasks (hidden entirely on a completed task with no checklist) -->
+    {% if subtasks or can_edit_subtasks %}
     <div class="bg-white shadow rounded-lg p-8 mt-6">
         <div class="flex items-center justify-between mb-4">
             <h2 class="text-lg font-bold text-blue-800">Checklist</h2>
@@ -221,6 +222,7 @@
         </form>
         {% endif %}
     </div>
+    {% endif %}
 
     <!-- Attachments -->
     <div class="bg-white shadow rounded-lg p-8 mt-6">

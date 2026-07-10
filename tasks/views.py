@@ -229,7 +229,9 @@ class TaskDetailView(LoginRequiredMixin, DetailView):
         ctx['attachments'] = self.object.attachments.select_related('uploaded_by')
         ctx['subtasks'] = self.object.subtasks.all()
         ctx['subtask_counts'] = self.object.subtask_counts
-        ctx['can_edit_subtasks'] = _can_access_task(self.request.user, self.object)
+        # no point editing a checklist once the task is completed (progress is locked at 100%)
+        ctx['can_edit_subtasks'] = (_can_access_task(self.request.user, self.object)
+                                    and self.object.status != 'completed')
         ctx['time_logs'] = self.object.time_logs.select_related('user')
         ctx['logged_hours'] = self.object.logged_hours
         ctx['timelog_form'] = TimeLogForm()
@@ -768,6 +770,10 @@ def payment_detail(request, pk):
 def reports_view(request):
     user = request.user
     form = ReportFilterForm(request.GET or None)
+    # The worker filter is a manager tool; don't render it for workers
+    # (the queryset below never honours it for them anyway).
+    if not _is_manager(user):
+        form.fields.pop('worker', None)
 
     # Build base queryset depending on role
     if user.is_superuser or user.role == 'manager':

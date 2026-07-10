@@ -21,10 +21,12 @@
             <label class="block text-sm font-medium text-gray-700">End date</label>
             {{ form.end_date }}
         </div>
+        {% if form.worker %}
         <div>
             <label class="block text-sm font-medium text-gray-700">Worker</label>
             {{ form.worker }}
         </div>
+        {% endif %}
         <div class="sm:col-span-3 mt-2">
             <button type="submit" class="bg-blue-800 text-white px-4 py-2 rounded">Filter</button>
             <a href="{% url 'reports' %}" class="ml-2 text-gray-600 hover:underline">Clear</a>

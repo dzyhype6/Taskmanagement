@@ -71,6 +71,8 @@
                 <div class="text-xs text-gray-400 mt-1">Paid a fixed salary, not per task. Switch pay type to per-task or hourly to pay for individual tasks.</div>
             </div>
             {% endif %}
+            {# only show the pay form when there is actually something to pay #}
+            {% if engineer.pay_type == 'per_task' and payable_tasks or engineer.pay_type == 'hourly' and unpaid_hours or engineer.pay_type == 'monthly' and engineer.monthly_salary %}
             <form method="post" action="{% url 'run_payment' engineer.pk %}" class="flex items-end gap-2">
                 {% csrf_token %}
                 <div class="text-sm flex-1"><label class="block text-gray-700">Period (optional)</label>
@@ -79,6 +81,13 @@
                     {% if engineer.pay_type == 'per_task' %}Pay {{ payable_tasks }} approved task(s){% elif engineer.pay_type == 'hourly' %}Pay {{ unpaid_hours }}h{% else %}Pay monthly salary{% endif %}
                 </button>
             </form>
+            {% else %}
+            <p class="text-sm text-gray-500">
+                {% if engineer.pay_type == 'per_task' %}Nothing to pay yet — approve completed tasks first.
+                {% elif engineer.pay_type == 'hourly' %}Nothing to pay yet — no unpaid logged hours.
+                {% else %}Set a monthly salary above to enable payment.{% endif %}
+            </p>
+            {% endif %}
             {% if payments %}
             <div class="mt-4">
                 <div class="text-xs font-semibold text-gray-500 uppercase mb-1">Recent payslips</div>
