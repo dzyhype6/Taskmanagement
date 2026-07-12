@@ -174,7 +174,28 @@ MPESA_INITIATOR_NAME = ''
 MPESA_SECURITY_CREDENTIAL = ''   # initiator password, encrypted with Safaricom's cert
 MPESA_RESULT_URL = ''            # public https URL -> /mpesa/b2c/result/
 MPESA_TIMEOUT_URL = ''           # public https URL -> /mpesa/b2c/timeout/
+
+# --- STK Push (Lipa na M-Pesa Online) — the flow that shows a PIN prompt ---
+# Sandbox defaults below work out of the box (Safaricom's public test values);
+# override MPESA_STK_CALLBACK_URL with your own public https tunnel. For
+# production, set all three from your go-live Paybill/Till.
+MPESA_STK_SHORTCODE = '174379'   # sandbox test PayBill
+MPESA_STK_PASSKEY = 'bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919'  # sandbox public passkey
+MPESA_STK_CALLBACK_URL = ''      # public https URL Safaricom POSTs the result to
 try:
     from .mpesa_config import *  # noqa: F401,F403
 except Exception:
     pass
+
+# Under the test suite, force M-Pesa OFF so run_payment / STK Push never make a
+# live Safaricom network call — tests must be deterministic and offline. Real
+# `runserver` still loads mpesa_config above and runs live for the demo.
+import sys as _sys
+if 'test' in _sys.argv:
+    MPESA_CONSUMER_KEY = MPESA_CONSUMER_SECRET = MPESA_SHORTCODE = ''
+    MPESA_INITIATOR_NAME = MPESA_SECURITY_CREDENTIAL = ''
+    MPESA_RESULT_URL = MPESA_TIMEOUT_URL = ''
+    MPESA_STK_SHORTCODE = MPESA_STK_PASSKEY = MPESA_STK_CALLBACK_URL = ''
+    # Fast password hashing in tests only — the many create_user() calls in the
+    # suite otherwise spend most of their time in PBKDF2. Never used in runserver.
+    PASSWORD_HASHERS = ['django.contrib.auth.hashers.MD5PasswordHasher']

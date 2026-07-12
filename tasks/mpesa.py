@@ -10,6 +10,9 @@ Real payouts are asynchronous: ``send_b2c`` only *initiates* the payment
 final result — including the real M-Pesa transaction code — to
 ``MPESA_RESULT_URL`` (handled by the ``mpesa_result`` view).
 """
+import base64
+from datetime import datetime
+
 import requests
 from django.conf import settings
 
@@ -87,5 +90,78 @@ def send_b2c(phone, amount, remarks='Payment', occasion='Payment'):
                     'originator': d.get('OriginatorConversationID', '')}
         return {'mode': 'live', 'ok': False,
                 'error': d.get('errorMessage') or d.get('ResponseDescription') or 'B2C request rejected'}
+    except Exception as e:                       # network / auth / parsing
+        return {'mode': 'live', 'ok': False, 'error': str(e)}
+
+
+# ---------------------------------------------------------------------------
+# STK Push (Lipa na M-Pesa Online / C2B) — pushes a PIN prompt TO a phone.
+#
+# Unlike B2C above (which pays money OUT and shows no prompt), STK Push asks a
+# customer to authorise a payment by entering their M-Pesa PIN on their handset.
+# This is the "prompt on my phone asking for a PIN" flow.
+#
+# NOTE ON SANDBOX: against the Daraja *sandbox* this call returns
+# ResponseCode '0' / "Success. Request accepted for processing" — proving the
+# API is correctly wired — but NO dialog reaches a real phone (Safaricom only
+# simulates it with test number 254708374149). A real prompt on a real handset
+# requires *production* (go-live) credentials.
+# ---------------------------------------------------------------------------
+
+STK_REQUIRED = [
+    'MPESA_CONSUMER_KEY', 'MPESA_CONSUMER_SECRET',
+    'MPESA_STK_SHORTCODE', 'MPESA_STK_PASSKEY', 'MPESA_STK_CALLBACK_URL',
+]
+
+
+def stk_enabled():
+    """True only when every credential/URL needed for an STK Push is set."""
+    return all(_cfg(k) for k in STK_REQUIRED)
+
+
+def stk_push(phone, amount, account_ref='TaskPay', description='Payment'):
+    """Initiate an STK Push (Lipa na M-Pesa Online). Returns one of:
+        {'mode': 'disabled'}                          # not configured
+        {'mode': 'live', 'ok': True,  'checkout_id': ..., 'customer_message': ...}
+        {'mode': 'live', 'ok': False, 'error': ...}
+    """
+    if not stk_enabled():
+        return {'mode': 'disabled'}
+    try:
+        token = get_access_token()
+        shortcode = _cfg('MPESA_STK_SHORTCODE')
+        timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
+        password = base64.b64encode(
+            (shortcode + _cfg('MPESA_STK_PASSKEY') + timestamp).encode()
+        ).decode()
+        msisdn = normalise_phone(phone)
+        body = {
+            'BusinessShortCode': shortcode,
+            'Password': password,
+            'Timestamp': timestamp,
+            'TransactionType': 'CustomerPayBillOnline',
+            'Amount': int(round(float(amount))),
+            'PartyA': msisdn,
+            'PartyB': shortcode,
+            'PhoneNumber': msisdn,
+            'CallBackURL': _cfg('MPESA_STK_CALLBACK_URL'),
+            'AccountReference': (account_ref or 'TaskPay')[:12],
+            'TransactionDesc': (description or 'Payment')[:13],
+        }
+        r = requests.post(
+            _base_url() + '/mpesa/stkpush/v1/processrequest',
+            json=body, headers={'Authorization': 'Bearer ' + token}, timeout=30,
+        )
+        d = r.json()
+        if str(d.get('ResponseCode')) == '0':
+            return {'mode': 'live', 'ok': True,
+                    'checkout_id': d.get('CheckoutRequestID', ''),
+                    'merchant_id': d.get('MerchantRequestID', ''),
+                    'customer_message': d.get('CustomerMessage', ''),
+                    'raw': d}
+        return {'mode': 'live', 'ok': False,
+                'error': d.get('errorMessage') or d.get('ResponseDescription')
+                or 'STK push rejected',
+                'raw': d}
     except Exception as e:                       # network / auth / parsing
         return {'mode': 'live', 'ok': False, 'error': str(e)}
