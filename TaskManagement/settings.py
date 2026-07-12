@@ -174,6 +174,14 @@ MPESA_INITIATOR_NAME = ''
 MPESA_SECURITY_CREDENTIAL = ''   # initiator password, encrypted with Safaricom's cert
 MPESA_RESULT_URL = ''            # public https URL -> /mpesa/b2c/result/
 MPESA_TIMEOUT_URL = ''           # public https URL -> /mpesa/b2c/timeout/
+
+# --- STK Push (Lipa na M-Pesa Online) — the flow that shows a PIN prompt ---
+# Sandbox defaults below work out of the box (Safaricom's public test values);
+# override MPESA_STK_CALLBACK_URL with your own public https tunnel. For
+# production, set all three from your go-live Paybill/Till.
+MPESA_STK_SHORTCODE = '174379'   # sandbox test PayBill
+MPESA_STK_PASSKEY = 'bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919'  # sandbox public passkey
+MPESA_STK_CALLBACK_URL = ''      # public https URL Safaricom POSTs the result to
 try:
     from .mpesa_config import *  # noqa: F401,F403
 except Exception:

@@ -22,6 +22,7 @@ from .forms import (
 from .services import notify, notify_managers
 from . import mpesa
 from django.contrib import messages
+from django.conf import settings
 
 
 def _is_manager(user):
@@ -122,6 +123,8 @@ def engineer_detail(request, pk):
         'unpaid_hours': unpaid_hours,
         'hourly_unpaid': hourly_unpaid,
         'payments': engineer.payments.all()[:10],
+        'mpesa_env': getattr(settings, 'MPESA_ENV', 'sandbox') or 'sandbox',
+        'stk_enabled': mpesa.stk_enabled(),
     })
 
 @login_required
@@ -235,7 +238,10 @@ class TaskDetailView(LoginRequiredMixin, DetailView):
         ctx['time_logs'] = self.object.time_logs.select_related('user')
         ctx['logged_hours'] = self.object.logged_hours
         ctx['timelog_form'] = TimeLogForm()
-        ctx['can_log_time'] = _can_access_task(self.request.user, self.object)
+        # Logging time is the assigned worker's action — the hours drive their
+        # (hourly) pay. Managers see logged hours read-only; they don't log time
+        # themselves (a manager's log would never be paid, just skewing reports).
+        ctx['can_log_time'] = (self.object.assigned_to_id == self.request.user.id)
         # "Cost of this work" (managers only) — what this task is paying.
         eng = self.object.assigned_to
         if eng.pay_type == 'hourly':
@@ -413,7 +419,9 @@ def delete_subtask(request, pk):
 @login_required
 def add_timelog(request, pk):
     task = get_object_or_404(Task, pk=pk)
-    if not _can_access_task(request.user, task):
+    # Only the assigned worker logs time (their hours drive their pay); managers
+    # get read-only visibility, so reject a manager POST here too.
+    if task.assigned_to_id != request.user.id:
         return redirect('task_detail', pk=task.pk)
     if request.method == 'POST':
         form = TimeLogForm(request.POST)
@@ -734,6 +742,49 @@ def mpesa_result(request):
 @csrf_exempt
 def mpesa_timeout(request):
     """Daraja B2C queue-timeout callback. Nothing to do but acknowledge."""
+    return JsonResponse({'ResultCode': 0, 'ResultDesc': 'Accepted'})
+
+
+@login_required
+def stk_push_demo(request, pk):
+    """Manager-only: fire an STK Push (Lipa na M-Pesa Online) to a phone as a
+    live proof the Daraja API is connected. On production this pops a real PIN
+    prompt on the handset; on sandbox Safaricom accepts the request and returns
+    a CheckoutRequestID but does not ring a real phone."""
+    if not _is_manager(request.user):
+        return redirect('worker_dashboard')
+    engineer = get_object_or_404(User, pk=pk, role='worker')
+    if request.method != 'POST':
+        return redirect('engineer_detail', pk=engineer.pk)
+    phone = (request.POST.get('phone') or engineer.mpesa_phone or '').strip()
+    amount = (request.POST.get('amount') or '1').strip()
+    if not phone:
+        messages.error(request, "Add an M-Pesa phone for this engineer first.")
+        return redirect('engineer_detail', pk=engineer.pk)
+
+    res = mpesa.stk_push(phone, amount, account_ref='WorkerPay',
+                         description='Worker payment')
+    env = getattr(settings, 'MPESA_ENV', 'sandbox') or 'sandbox'
+    if res.get('mode') == 'disabled':
+        messages.error(request, "STK Push is not configured (set the MPESA_STK_* settings).")
+    elif res.get('ok'):
+        tail = ("" if env == 'production' else
+                " — sandbox accepted the request; a real PIN prompt requires production credentials")
+        messages.success(
+            request,
+            f"STK Push accepted by Safaricom for {mpesa.normalise_phone(phone)}. "
+            f"{res.get('customer_message')} · CheckoutRequestID "
+            f"{res.get('checkout_id')}{tail}")
+    else:
+        messages.error(request, f"STK Push failed: {res.get('error')}")
+    return redirect('engineer_detail', pk=engineer.pk)
+
+
+@csrf_exempt
+def mpesa_stk_callback(request):
+    """Daraja STK Push (Lipa na M-Pesa Online) result callback. Safaricom POSTs
+    the outcome here after the customer accepts or cancels the PIN prompt.
+    Always acknowledged with 200 so Safaricom stops retrying."""
     return JsonResponse({'ResultCode': 0, 'ResultDesc': 'Accepted'})
 
 

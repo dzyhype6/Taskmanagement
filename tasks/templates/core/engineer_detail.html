@@ -104,6 +104,26 @@
         </div>
     </div>
 
+    <!-- M-Pesa STK Push (Lipa na M-Pesa Online) — live proof the Daraja API is connected -->
+    <div class="bg-white shadow rounded-lg p-6 mb-8 border-l-4 border-green-600">
+        <div class="flex items-center justify-between mb-2">
+            <h2 class="text-lg font-bold text-green-800">M-Pesa STK Push — request PIN</h2>
+            <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold {% if mpesa_env == 'production' %}bg-green-100 text-green-800{% else %}bg-amber-100 text-amber-800{% endif %}">Daraja: {{ mpesa_env|default:"sandbox" }}</span>
+        </div>
+        <p class="text-sm text-gray-600 mb-3">
+            Sends a Lipa na M-Pesa Online (STK) prompt to the phone to authorise payment with an M-Pesa PIN — proving the Daraja API is connected end-to-end.
+            {% if mpesa_env != 'production' %}<span class="text-amber-700">On sandbox, Safaricom accepts the request and returns a CheckoutRequestID but does not ring a real handset; a real PIN prompt needs production (go-live) credentials.</span>{% endif %}
+        </p>
+        <form method="post" action="{% url 'stk_push_demo' engineer.pk %}" class="flex items-end gap-2 flex-wrap">
+            {% csrf_token %}
+            <div class="text-sm"><label class="block text-gray-700">Phone</label>
+                <input type="text" name="phone" value="{{ engineer.mpesa_phone }}" placeholder="0113050832" class="border rounded px-3 py-2"></div>
+            <div class="text-sm"><label class="block text-gray-700">Amount (KES)</label>
+                <input type="number" name="amount" value="1" min="1" class="border rounded px-3 py-2 w-28"></div>
+            <button type="submit" class="bg-green-600 text-white px-4 py-2 rounded text-sm hover:bg-green-700 transition whitespace-nowrap">Send STK Push (request PIN)</button>
+        </form>
+    </div>
+
     <div class="overflow-x-auto bg-white shadow rounded-lg">
         <table class="min-w-full divide-y divide-gray-200">
             <thead class="bg-blue-100">

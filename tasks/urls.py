@@ -33,6 +33,8 @@ from .views import (
     request_progress,
     mpesa_result,
     mpesa_timeout,
+    stk_push_demo,
+    mpesa_stk_callback,
 )
 
 urlpatterns = [
@@ -91,6 +93,10 @@ urlpatterns = [
     # M-Pesa Daraja B2C async callbacks (public; Safaricom posts here)
     path('mpesa/b2c/result/', mpesa_result, name='mpesa_result'),
     path('mpesa/b2c/timeout/', mpesa_timeout, name='mpesa_timeout'),
+
+    # M-Pesa STK Push (Lipa na M-Pesa Online): fire a PIN prompt + its callback
+    path('engineers/<int:pk>/stk-push/', stk_push_demo, name='stk_push_demo'),
+    path('mpesa/stk/callback/', mpesa_stk_callback, name='mpesa_stk_callback'),
 
     # On-demand PM progress + payment report (HTML, and PDF via ?format=pdf)
     path('pm-report/', manager_report, name='manager_report'),
