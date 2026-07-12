@@ -186,3 +186,16 @@ try:
     from .mpesa_config import *  # noqa: F401,F403
 except Exception:
     pass
+
+# Under the test suite, force M-Pesa OFF so run_payment / STK Push never make a
+# live Safaricom network call — tests must be deterministic and offline. Real
+# `runserver` still loads mpesa_config above and runs live for the demo.
+import sys as _sys
+if 'test' in _sys.argv:
+    MPESA_CONSUMER_KEY = MPESA_CONSUMER_SECRET = MPESA_SHORTCODE = ''
+    MPESA_INITIATOR_NAME = MPESA_SECURITY_CREDENTIAL = ''
+    MPESA_RESULT_URL = MPESA_TIMEOUT_URL = ''
+    MPESA_STK_SHORTCODE = MPESA_STK_PASSKEY = MPESA_STK_CALLBACK_URL = ''
+    # Fast password hashing in tests only — the many create_user() calls in the
+    # suite otherwise spend most of their time in PBKDF2. Never used in runserver.
+    PASSWORD_HASHERS = ['django.contrib.auth.hashers.MD5PasswordHasher']
